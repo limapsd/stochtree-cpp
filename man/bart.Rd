@@ -35,15 +35,12 @@ bart(
   random_seed = -1,
   keep_burnin = F,
   keep_gfr = F,
-  verbose = F
+  Sparse = F,
+  Theta_Update = F
 )
 }
 \arguments{
-\item{X_train}{Covariates used to split trees in the ensemble. May be provided either as a dataframe or a matrix.
-Matrix covariates will be assumed to be all numeric. Covariates passed as a dataframe will be
-preprocessed based on the variable types (e.g. categorical columns stored as unordered factors will be one-hot encoded,
-categorical columns stored as ordered factors will passed as integers to the core algorithm, along with the metadata
-that the column is ordered categorical).}
+\item{X_train}{Covariates used to split trees in the ensemble.}
 
 \item{y_train}{Outcome to be modeled by the ensemble.}
 
@@ -57,9 +54,7 @@ parameters, implicitly regressing on a constant basis of ones (i.e. \code{y ~ 1}
 If \code{group_ids_train} is provided with a regression basis, an intercept-only random effects model
 will be estimated.}
 
-\item{X_test}{(Optional) Test set of covariates used to define "out of sample" evaluation data.
-May be provided either as a dataframe or a matrix, but the format of \code{X_test} must be consistent with
-that of \code{X_train}.}
+\item{X_test}{(Optional) Test set of covariates used to define "out of sample" evaluation data.}
 
 \item{W_test}{(Optional) Test set of bases used to define "out of sample" evaluation data.
 While a test set is optional, the structure of any provided test set must match that
@@ -112,7 +107,9 @@ that were not in the training set.}
 
 \item{keep_gfr}{Whether or not "grow-from-root" samples should be included in cached predictions. Default TRUE. Ignored if num_mcmc = 0.}
 
-\item{verbose}{Whether or not to print progress during the sampling loops. Default: FALSE.}
+\item{Sparse}{Whether you want to turn on the dirichilet prior.}
+
+\item{Theta_Update}{Whether or not update the theta of the dirichilet prior.}
 
 \item{variable_weights}{Vector of length \code{ncol(X_train)} indicating a "weight" placed on each
 variable for sampling purposes. Default: \code{rep(1/ncol(X_train),ncol(X_train))}.}

@@ -14,7 +14,8 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.1
-LinkingTo: 
+LinkingTo:
+    stochvol,
     cpp11
 Suggests: 
     knitr,
@@ -25,6 +26,7 @@ Suggests:
     mvtnorm,
     ggplot2,
     latex2exp,
+    invgamma,
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
 SystemRequirements: C++17

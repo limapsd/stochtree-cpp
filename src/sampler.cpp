@@ -75,7 +75,7 @@ void sample_gfr_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestDatas
 }
 
 [[cpp11::register]]
-void sample_mcmc_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestDataset> data, 
+cpp11::writable::integers sample_mcmc_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestDataset> data, 
                                    cpp11::external_pointer<StochTree::ColumnVector> residual, 
                                    cpp11::external_pointer<StochTree::ForestContainer> forest_samples, 
                                    cpp11::external_pointer<StochTree::ForestTracker> tracker, 
@@ -83,7 +83,8 @@ void sample_mcmc_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestData
                                    cpp11::external_pointer<std::mt19937> rng, 
                                    cpp11::integers feature_types, int cutpoint_grid_size, 
                                    cpp11::doubles_matrix<> leaf_model_scale_input, 
-                                   cpp11::doubles variable_weights, 
+                                   cpp11::doubles variable_weights,
+                                   cpp11::writable::integers variable_count_splits, 
                                    double global_variance, int leaf_model_int, 
                                    bool pre_initialized = false
 ) {
@@ -122,20 +123,32 @@ void sample_mcmc_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestData
         var_weights_vector[i] = variable_weights[i];
     }
     
+    // Converting to std::vector
+    std::vector<int32_t> variable_count_splits_cpp(variable_count_splits.begin(), variable_count_splits.end());
+    // This should be better dealwith internally, like:
+    //std::vector<int32_t> variable_count_splits(variable_weights.size()); 
+
+
     // Run one iteration of the sampler
     if (leaf_model_enum == ForestLeafModel::kConstant) {
         StochTree::GaussianConstantLeafModel leaf_model = StochTree::GaussianConstantLeafModel(leaf_scale);
         StochTree::MCMCForestSampler<StochTree::GaussianConstantLeafModel> sampler = StochTree::MCMCForestSampler<StochTree::GaussianConstantLeafModel>();
-        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, global_variance, pre_initialized);
+        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, variable_count_splits_cpp, global_variance, pre_initialized);
     } else if (leaf_model_enum == ForestLeafModel::kUnivariateRegression) {
         StochTree::GaussianUnivariateRegressionLeafModel leaf_model = StochTree::GaussianUnivariateRegressionLeafModel(leaf_scale);
         StochTree::MCMCForestSampler<StochTree::GaussianUnivariateRegressionLeafModel> sampler = StochTree::MCMCForestSampler<StochTree::GaussianUnivariateRegressionLeafModel>();
-        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, global_variance, pre_initialized);
+        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, variable_count_splits_cpp, global_variance, pre_initialized);
     } else if (leaf_model_enum == ForestLeafModel::kMultivariateRegression) {
         StochTree::GaussianMultivariateRegressionLeafModel leaf_model = StochTree::GaussianMultivariateRegressionLeafModel(leaf_scale_matrix);
         StochTree::MCMCForestSampler<StochTree::GaussianMultivariateRegressionLeafModel> sampler = StochTree::MCMCForestSampler<StochTree::GaussianMultivariateRegressionLeafModel>();
-        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, global_variance, pre_initialized);
+        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, variable_count_splits_cpp, global_variance, pre_initialized);
     }
+    
+    for(int i =0; i<variable_count_splits.size();i++){
+      variable_count_splits.at(i) = variable_count_splits_cpp.at(i);
+    }
+    
+    return variable_count_splits;
 }
 
 [[cpp11::register]]

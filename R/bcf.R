@@ -1,10 +1,6 @@
 #' Run the Bayesian Causal Forest (BCF) algorithm for regularized causal effect estimation. 
 #'
-#' @param X_train Covariates used to split trees in the ensemble. May be provided either as a dataframe or a matrix. 
-#' Matrix covariates will be assumed to be all numeric. Covariates passed as a dataframe will be 
-#' preprocessed based on the variable types (e.g. categorical columns stored as unordered factors will be one-hot encoded, 
-#' categorical columns stored as ordered factors will passed as integers to the core algorithm, along with the metadata 
-#' that the column is ordered categorical).
+#' @param X_train Covariates used to split trees in the ensemble. Must be passed as a dataframe.
 #' @param Z_train Vector of (continuous or binary) treatment assignments.
 #' @param y_train Outcome to be modeled by the ensemble.
 #' @param pi_train (Optional) Vector of propensity scores. If not provided, this will be estimated from the data.
@@ -12,9 +8,7 @@
 #' @param rfx_basis_train (Optional) Basis for "random-slope" regression in an additive random effects model.
 #' If `group_ids_train` is provided with a regression basis, an intercept-only random effects model 
 #' will be estimated.
-#' @param X_test (Optional) Test set of covariates used to define "out of sample" evaluation data. 
-#' May be provided either as a dataframe or a matrix, but the format of `X_test` must be consistent with 
-#' that of `X_train`.
+#' @param X_test (Optional) Test set of covariates used to define "out of sample" evaluation data. Can be passed as either a matrix or dataframe.
 #' @param Z_test (Optional) Test set of (continuous or binary) treatment assignments.
 #' @param pi_test (Optional) Vector of propensity scores. If not provided, this will be estimated from the data.
 #' @param group_ids_test (Optional) Test set group labels used for an additive random effects model. 
@@ -53,7 +47,6 @@
 #' @param random_seed Integer parameterizing the C++ random number generator. If not specified, the C++ random number generator is seeded according to `std::random_device`.
 #' @param keep_burnin Whether or not "burnin" samples should be included in cached predictions. Default FALSE. Ignored if num_mcmc = 0.
 #' @param keep_gfr Whether or not "grow-from-root" samples should be included in cached predictions. Default FALSE. Ignored if num_mcmc = 0.
-#' @param verbose Whether or not to print progress during the sampling loops. Default: FALSE.
 #'
 #' @return List of sampling outputs and a wrapper around the sampled forests (which can be used for in-memory prediction on new data, or serialized to JSON on disk).
 #' @export
@@ -114,23 +107,23 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
                 q = 0.9, sigma2 = NULL, num_trees_mu = 250, num_trees_tau = 50, num_gfr = 5, 
                 num_burnin = 0, num_mcmc = 100, sample_sigma_global = T, sample_sigma_leaf_mu = T, 
                 sample_sigma_leaf_tau = F, propensity_covariate = "mu", adaptive_coding = T,
-                b_0 = -0.5, b_1 = 0.5, random_seed = -1, keep_burnin = F, keep_gfr = F, verbose = F) {
+                b_0 = -0.5, b_1 = 0.5, random_seed = -1, keep_burnin = F, keep_gfr = F) {
     # Preprocess covariates
-    if ((!is.data.frame(X_train)) && (!is.matrix(X_train))) {
-        stop("X_train must be a matrix or dataframe")
+    if (!is.data.frame(X_train)) {
+        stop("X_train must be a dataframe")
     }
     if (!is.null(X_test)){
-        if ((!is.data.frame(X_test)) && (!is.matrix(X_test))) {
-            stop("X_test must be a matrix or dataframe")
+        if (!is.data.frame(X_test)) {
+            stop("X_test must be a dataframe")
         }
     }
-    train_cov_preprocess_list <- preprocessTrainData(X_train)
+    train_cov_preprocess_list <- preprocessTrainDataFrame(X_train)
     X_train_metadata <- train_cov_preprocess_list$metadata
     X_train_raw <- X_train
     X_train <- train_cov_preprocess_list$data
     feature_types <- X_train_metadata$feature_types
     X_test_raw <- X_test
-    if (!is.null(X_test)) X_test <- preprocessPredictionData(X_test, X_train_metadata)
+    if (!is.null(X_test)) X_test <- preprocessPredictionDataFrame(X_test, X_train_metadata)
     
     # Convert all input data to matrices if not already converted
     if ((is.null(dim(Z_train))) && (!is.null(Z_train))) {
@@ -169,13 +162,6 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
         }
     }
     
-    # Check that outcome and treatment are numeric
-    if (!is.numeric(y_train)) stop("y_train must be numeric")
-    if (!is.numeric(Z_train)) stop("Z_train must be numeric")
-    if (!is.null(Z_test)) {
-        if (!is.numeric(Z_test)) stop("Z_test must be numeric")
-    }
-
     # Data consistency checks
     if ((!is.null(X_test)) && (ncol(X_test) != ncol(X_train))) {
         stop("X_train and X_test must have the same number of columns")
@@ -231,11 +217,6 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
             rfx_basis_test <- matrix(rep(1,nrow(X_test)), nrow = nrow(X_test), ncol = 1)
         }
     }
-    
-    # Check that number of samples are all nonnegative
-    stopifnot(num_gfr >= 0)
-    stopifnot(num_burnin >= 0)
-    stopifnot(num_mcmc >= 0)
 
     # Determine whether a test set is provided
     has_test = !is.null(X_test)
@@ -245,9 +226,8 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
         y_train <- as.matrix(y_train)
     }
     
-    # Check whether treatment is binary (specifically 0-1 binary)
+    # Check whether treatment is binary
     binary_treatment <- length(unique(Z_train)) == 2
-    if (!(all(sort(unique(Z_train)) == c(0,1)))) binary_treatment <- F
     
     # Adaptive coding will be ignored for continuous / ordered categorical treatments
     if ((!binary_treatment) && (adaptive_coding)) {
@@ -310,6 +290,7 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
     }
     
     # Set variable weights for the prognostic and treatment effect forests
+    variable_selection_splits  = NULL
     variable_weights_mu = rep(1/ncol(X_train_mu), ncol(X_train_mu))
     variable_weights_tau = rep(1/ncol(X_train_tau), ncol(X_train_tau))
     
@@ -416,22 +397,15 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
     update_residual_forest_container_cpp(forest_dataset_tau_train$data_ptr, outcome_train$data_ptr, 
                                          forest_samples_tau$forest_container_ptr, forest_model_tau$tracker_ptr, 
                                          T, 0, F)
-
+    
     # Run GFR (warm start) if specified
     if (num_gfr > 0){
         gfr_indices = 1:num_gfr
         for (i in 1:num_gfr) {
-            # Print progress
-            if (verbose) {
-                if ((i %% 10 == 0) || (i == num_gfr)) {
-                    cat("Sampling", i, "out of", num_gfr, "XBCF (grow-from-root) draws\n")
-                }
-            }
-            
             # Sample the prognostic forest
             forest_model_mu$sample_one_iteration(
                 forest_dataset_mu_train, outcome_train, forest_samples_mu, rng, feature_types_mu, 
-                0, current_leaf_scale_mu, variable_weights_mu, 
+                0, current_leaf_scale_mu, variable_weights_mu, variable_selection_splits, 
                 current_sigma2, cutpoint_grid_size, gfr = T, pre_initialized = T
             )
             
@@ -448,7 +422,7 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
             # Sample the treatment forest
             forest_model_tau$sample_one_iteration(
                 forest_dataset_tau_train, outcome_train, forest_samples_tau, rng, feature_types_tau, 
-                1, current_leaf_scale_tau, variable_weights_tau, 
+                1, current_leaf_scale_tau, variable_weights_tau, variable_selection_splits,  
                 current_sigma2, cutpoint_grid_size, gfr = T, pre_initialized = T
             )
             
@@ -512,24 +486,10 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
             mcmc_indices = (num_gfr+num_burnin+1):(num_gfr+num_burnin+num_mcmc)
         }
         for (i in (num_gfr+1):num_samples) {
-            # Print progress
-            if (verbose) {
-                if (num_burnin > 0) {
-                    if (((i - num_gfr) %% 100 == 0) || ((i - num_gfr) == num_burnin)) {
-                        cat("Sampling", i - num_gfr, "out of", num_gfr, "BCF burn-in draws\n")
-                    }
-                }
-                if (num_mcmc > 0) {
-                    if (((i - num_gfr - num_burnin) %% 100 == 0) || (i == num_samples)) {
-                        cat("Sampling", i - num_burnin - num_gfr, "out of", num_mcmc, "BCF MCMC draws\n")
-                    }
-                }
-            }
-            
             # Sample the prognostic forest
             forest_model_mu$sample_one_iteration(
                 forest_dataset_mu_train, outcome_train, forest_samples_mu, rng, feature_types_mu, 
-                0, current_leaf_scale_mu, variable_weights_mu, 
+                0, current_leaf_scale_mu, variable_weights_mu, variable_selection_splits, 
                 current_sigma2, cutpoint_grid_size, gfr = F, pre_initialized = T
             )
             
@@ -546,7 +506,7 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
             # Sample the treatment forest
             forest_model_tau$sample_one_iteration(
                 forest_dataset_tau_train, outcome_train, forest_samples_tau, rng, feature_types_tau, 
-                1, current_leaf_scale_tau, variable_weights_tau, 
+                1, current_leaf_scale_tau, variable_weights_tau, variable_selection_splits, 
                 current_sigma2, cutpoint_grid_size, gfr = F, pre_initialized = T
             )
             
@@ -748,7 +708,7 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
 #' Predict from a sampled BCF model on new data
 #'
 #' @param bcf Object of type `bcf` containing draws of a Bayesian causal forest model and associated sampling outputs.
-#' @param X_test Covariates used to determine tree leaf predictions for each observation. Must be passed as a matrix or dataframe.
+#' @param X_test Covariates used to determine tree leaf predictions for each observation. Must be passed as a dataframe.
 #' @param Z_test Treatments used for prediction.
 #' @param pi_test (Optional) Propensities used for prediction.
 #' @param group_ids_test (Optional) Test set group labels used for an additive random effects model. 
@@ -809,11 +769,11 @@ bcf <- function(X_train, Z_train, y_train, pi_train = NULL, group_ids_train = NU
 #' # abline(0,1,col="red",lty=3,lwd=3)
 predict.bcf <- function(bcf, X_test, Z_test, pi_test = NULL, group_ids_test = NULL, rfx_basis_test = NULL, predict_all = F){
     # Preprocess covariates
-    if ((!is.data.frame(X_test)) && (!is.matrix(X_test))) {
-        stop("X_test must be a matrix or dataframe")
+    if (!is.data.frame(X_test)) {
+        stop("X_test must be a dataframe")
     }
     train_set_metadata <- bcf$train_set_metadata
-    X_test <- preprocessPredictionData(X_test, train_set_metadata)
+    X_test <- preprocessPredictionDataFrame(X_test, train_set_metadata)
     
     # Convert all input data to matrices if not already converted
     if ((is.null(dim(Z_test))) && (!is.null(Z_test))) {

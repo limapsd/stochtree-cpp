@@ -16,7 +16,7 @@
 \arguments{
 \item{bart}{Object of type \code{bart} containing draws of a regression forest and associated sampling outputs.}
 
-\item{X_test}{Covariates used to determine tree leaf predictions for each observation. Must be passed as a matrix or dataframe.}
+\item{X_test}{Covariates used to determine tree leaf predictions for each observation. Must be passed as a dataframe.}
 
 \item{W_test}{(Optional) Bases used for prediction (by e.g. dot product with leaf values). Default: \code{NULL}.}
 

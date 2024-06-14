@@ -79,6 +79,7 @@ Run a single iteration of the forest sampling algorithm (MCMC or GFR)
   leaf_model_int,
   leaf_model_scale,
   variable_weights,
+  variable_count_splits,
   global_scale,
   cutpoint_grid_size = 500,
   gfr = T,
@@ -104,6 +105,9 @@ Run a single iteration of the forest sampling algorithm (MCMC or GFR)
 \item{\code{leaf_model_scale}}{Scale parameter used in the leaf node model (should be a q x q matrix where q is the dimensionality of the basis and is only >1 when \code{leaf_model_int = 2})}
 
 \item{\code{variable_weights}}{Vector specifying sampling probability for all p covariates in \code{forest_dataset}}
+
+\item{\code{variable_count_splits}}{\subsection{}{
+}}
 
 \item{\code{global_scale}}{Global variance parameter}
 

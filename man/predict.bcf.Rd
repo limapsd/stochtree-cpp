@@ -17,7 +17,7 @@
 \arguments{
 \item{bcf}{Object of type \code{bcf} containing draws of a Bayesian causal forest model and associated sampling outputs.}
 
-\item{X_test}{Covariates used to determine tree leaf predictions for each observation. Must be passed as a matrix or dataframe.}
+\item{X_test}{Covariates used to determine tree leaf predictions for each observation. Must be passed as a dataframe.}
 
 \item{Z_test}{Treatments used for prediction.}
 

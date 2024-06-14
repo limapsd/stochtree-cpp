@@ -47,16 +47,11 @@ bcf(
   b_1 = 0.5,
   random_seed = -1,
   keep_burnin = F,
-  keep_gfr = F,
-  verbose = F
+  keep_gfr = F
 )
 }
 \arguments{
-\item{X_train}{Covariates used to split trees in the ensemble. May be provided either as a dataframe or a matrix.
-Matrix covariates will be assumed to be all numeric. Covariates passed as a dataframe will be
-preprocessed based on the variable types (e.g. categorical columns stored as unordered factors will be one-hot encoded,
-categorical columns stored as ordered factors will passed as integers to the core algorithm, along with the metadata
-that the column is ordered categorical).}
+\item{X_train}{Covariates used to split trees in the ensemble. Must be passed as a dataframe.}
 
 \item{Z_train}{Vector of (continuous or binary) treatment assignments.}
 
@@ -70,9 +65,7 @@ that the column is ordered categorical).}
 If \code{group_ids_train} is provided with a regression basis, an intercept-only random effects model
 will be estimated.}
 
-\item{X_test}{(Optional) Test set of covariates used to define "out of sample" evaluation data.
-May be provided either as a dataframe or a matrix, but the format of \code{X_test} must be consistent with
-that of \code{X_train}.}
+\item{X_test}{(Optional) Test set of covariates used to define "out of sample" evaluation data. Can be passed as either a matrix or dataframe.}
 
 \item{Z_test}{(Optional) Test set of (continuous or binary) treatment assignments.}
 
@@ -147,8 +140,6 @@ that were not in the training set.}
 \item{keep_burnin}{Whether or not "burnin" samples should be included in cached predictions. Default FALSE. Ignored if num_mcmc = 0.}
 
 \item{keep_gfr}{Whether or not "grow-from-root" samples should be included in cached predictions. Default FALSE. Ignored if num_mcmc = 0.}
-
-\item{verbose}{Whether or not to print progress during the sampling loops. Default: FALSE.}
 }
 \value{
 List of sampling outputs and a wrapper around the sampled forests (which can be used for in-memory prediction on new data, or serialized to JSON on disk).

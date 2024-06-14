@@ -1,10 +1,6 @@
 #' Run the BART algorithm for supervised learning. 
 #'
-#' @param X_train Covariates used to split trees in the ensemble. May be provided either as a dataframe or a matrix. 
-#' Matrix covariates will be assumed to be all numeric. Covariates passed as a dataframe will be 
-#' preprocessed based on the variable types (e.g. categorical columns stored as unordered factors will be one-hot encoded, 
-#' categorical columns stored as ordered factors will passed as integers to the core algorithm, along with the metadata 
-#' that the column is ordered categorical).
+#' @param X_train Covariates used to split trees in the ensemble.
 #' @param y_train Outcome to be modeled by the ensemble.
 #' @param W_train (Optional) Bases used to define a regression model `y ~ W` in 
 #' each leaf of each regression tree. By default, BART assumes constant leaf node 
@@ -13,9 +9,7 @@
 #' @param rfx_basis_train (Optional) Basis for "random-slope" regression in an additive random effects model.
 #' If `group_ids_train` is provided with a regression basis, an intercept-only random effects model 
 #' will be estimated.
-#' @param X_test (Optional) Test set of covariates used to define "out of sample" evaluation data. 
-#' May be provided either as a dataframe or a matrix, but the format of `X_test` must be consistent with 
-#' that of `X_train`.
+#' @param X_test (Optional) Test set of covariates used to define "out of sample" evaluation data.
 #' @param W_test (Optional) Test set of bases used to define "out of sample" evaluation data. 
 #' While a test set is optional, the structure of any provided test set must match that 
 #' of the training set (i.e. if both X_train and W_train are provided, then a test set must 
@@ -46,8 +40,8 @@
 #' @param random_seed Integer parameterizing the C++ random number generator. If not specified, the C++ random number generator is seeded according to `std::random_device`.
 #' @param keep_burnin Whether or not "burnin" samples should be included in cached predictions. Default FALSE. Ignored if num_mcmc = 0.
 #' @param keep_gfr Whether or not "grow-from-root" samples should be included in cached predictions. Default TRUE. Ignored if num_mcmc = 0.
-#' @param verbose Whether or not to print progress during the sampling loops. Default: FALSE.
-#'
+#' @param Sparse Whether you want to turn on the dirichilet prior.
+#' @param Theta_Update Whether or not update the theta of the dirichilet prior. 
 #' @return List of sampling outputs and a wrapper around the sampled forests (which can be used for in-memory prediction on new data, or serialized to JSON on disk).
 #' @export
 #'
@@ -83,22 +77,23 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                  nu = 3, lambda = NULL, a_leaf = 3, b_leaf = NULL, 
                  q = 0.9, sigma2_init = NULL, num_trees = 200, num_gfr = 5, 
                  num_burnin = 0, num_mcmc = 100, sample_sigma = T, 
-                 sample_tau = T, random_seed = -1, keep_burnin = F, 
-                 keep_gfr = F, verbose = F){
+                 sample_tau = T, random_seed = -1, keep_burnin = F, keep_gfr = F,
+                 Sparse = F,
+                 Theta_Update = F){
     # Preprocess covariates
-    if ((!is.data.frame(X_train)) && (!is.matrix(X_train))) {
-        stop("X_train must be a matrix or dataframe")
+    if (!is.data.frame(X_train)) {
+        stop("X_train must be a dataframe")
     }
     if (!is.null(X_test)){
-        if ((!is.data.frame(X_test)) && (!is.matrix(X_test))) {
-            stop("X_test must be a matrix or dataframe")
+        if (!is.data.frame(X_test)) {
+            stop("X_test must be a dataframe")
         }
     }
-    train_cov_preprocess_list <- preprocessTrainData(X_train)
+    train_cov_preprocess_list <- preprocessTrainDataFrame(X_train)
     X_train_metadata <- train_cov_preprocess_list$metadata
     X_train <- train_cov_preprocess_list$data
     feature_types <- X_train_metadata$feature_types
-    if (!is.null(X_test)) X_test <- preprocessPredictionData(X_test, X_train_metadata)
+    if (!is.null(X_test)) X_test <- preprocessPredictionDataFrame(X_test, X_train_metadata)
     
     # Convert all input data to matrices if not already converted
     if ((is.null(dim(W_train))) && (!is.null(W_train))) {
@@ -299,20 +294,17 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
     # Variable selection weights
     variable_weights <- rep(1/ncol(X_train), ncol(X_train))
     
+    #Variable Selection Splits
+    variable_count_splits <- as.integer(rep(0, ncol(X_train)))
+    var_count_matrix = matrix(NA, nrow = num_samples, ncol =  ncol(X_train))
+    
     # Run GFR (warm start) if specified
     if (num_gfr > 0){
         gfr_indices = 1:num_gfr
         for (i in 1:num_gfr) {
-            # Print progress
-            if (verbose) {
-                if ((i %% 10 == 0) || (i == num_gfr)) {
-                    cat("Sampling", i, "out of", num_gfr, "XBART (grow-from-root) draws\n")
-                }
-            }
-            
             forest_model$sample_one_iteration(
                 forest_dataset_train, outcome_train, forest_samples, rng, feature_types, 
-                leaf_model, current_leaf_scale, variable_weights, 
+                leaf_model, current_leaf_scale, variable_weights, variable_count_splits, 
                 current_sigma2, cutpoint_grid_size, gfr = T, pre_initialized = F
             )
             if (sample_sigma) {
@@ -329,6 +321,9 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
         }
     }
     
+    #Dirichlet Initialization
+    theta = 1
+    
     # Run MCMC
     if (num_burnin + num_mcmc > 0) {
         if (num_burnin > 0) {
@@ -338,25 +333,20 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
             mcmc_indices = (num_gfr+num_burnin+1):(num_gfr+num_burnin+num_mcmc)
         }
         for (i in (num_gfr+1):num_samples) {
-            # Print progress
-            if (verbose) {
-                if (num_burnin > 0) {
-                    if (((i - num_gfr) %% 100 == 0) || ((i - num_gfr) == num_burnin)) {
-                        cat("Sampling", i - num_gfr, "out of", num_gfr, "BART burn-in draws\n")
-                    }
-                }
-                if (num_mcmc > 0) {
-                    if (((i - num_gfr - num_burnin) %% 100 == 0) || (i == num_samples)) {
-                        cat("Sampling", i - num_burnin - num_gfr, "out of", num_mcmc, "BART MCMC draws\n")
-                    }
-                }
-            }
-            
-            forest_model$sample_one_iteration(
+          variable_count_splits = forest_model$sample_one_iteration(
                 forest_dataset_train, outcome_train, forest_samples, rng, feature_types, 
-                leaf_model, current_leaf_scale, variable_weights, 
+                leaf_model, current_leaf_scale, variable_weights, variable_count_splits, 
                 current_sigma2, cutpoint_grid_size, gfr = F, pre_initialized = F
             )
+          if(Sparse == TRUE){
+            lpv              = draw_s(variable_count_splits, theta)
+            variable_weights = exp(lpv)
+            if(Theta_Update == TRUE){
+              theta = draw_theta0(theta, lpv, 0.5, 1, rho = length(lpv))  
+            }
+            
+          }
+          var_count_matrix[i,] = variable_count_splits
             if (sample_sigma) {
                 global_var_samples[i] <- sample_sigma2_one_iteration(outcome_train, rng, nu, lambda)
                 current_sigma2 <- global_var_samples[i]
@@ -368,6 +358,7 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
             if (has_rfx) {
                 rfx_model$sample_random_effect(rfx_dataset_train, outcome_train, rfx_tracker_train, rfx_samples, current_sigma2, rng)
             }
+          
         }
     }
     
@@ -449,7 +440,8 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
         "has_rfx_basis" = has_basis_rfx, 
         "num_rfx_basis" = num_basis_rfx, 
         "sample_sigma" = sample_sigma,
-        "sample_tau" = sample_tau
+        "sample_tau" = sample_tau,
+        "variable_count_splits" =var_count_matrix
     )
     result <- list(
         "forests" = forest_samples, 
@@ -484,7 +476,7 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
 #' Predict from a sampled BART model on new data
 #'
 #' @param bart Object of type `bart` containing draws of a regression forest and associated sampling outputs.
-#' @param X_test Covariates used to determine tree leaf predictions for each observation. Must be passed as a matrix or dataframe.
+#' @param X_test Covariates used to determine tree leaf predictions for each observation. Must be passed as a dataframe.
 #' @param W_test (Optional) Bases used for prediction (by e.g. dot product with leaf values). Default: `NULL`.
 #' @param group_ids_test (Optional) Test set group labels used for an additive random effects model. 
 #' We do not currently support (but plan to in the near future), test set evaluation for group labels
@@ -523,11 +515,11 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
 #' # abline(0,1,col="red",lty=3,lwd=3)
 predict.bartmodel <- function(bart, X_test, W_test = NULL, group_ids_test = NULL, rfx_basis_test = NULL, predict_all = F){
     # Preprocess covariates
-    if ((!is.data.frame(X_test)) && (!is.matrix(X_test))) {
-        stop("X_test must be a matrix or dataframe")
+    if (!is.data.frame(X_test)) {
+        stop("X_test must be a dataframe")
     }
     train_set_metadata <- bart$train_set_metadata
-    X_test <- preprocessPredictionData(X_test, train_set_metadata)
+    X_test <- preprocessPredictionDataFrame(X_test, train_set_metadata)
     
     # Convert all input data to matrices if not already converted
     if ((is.null(dim(W_test))) && (!is.null(W_test))) {
@@ -673,3 +665,87 @@ getRandomEffectSamples.bartmodel <- function(object, ...){
     
     return(result)
 }
+
+
+
+
+
+log_sum_exp = function(v){
+  n = length(v)
+  mx = max(v)
+  sm = 0
+  for(i in 1:n){
+    sm = sm + exp(v[i] - mx)
+  }
+  return(mx + log(sm))
+}
+
+log_gamma = function(shape){
+  y = log(rgamma(1, shape+ 1))
+  z = log(runif(1))/shape
+  return(y+z)
+}
+
+log_dirichilet = function(alpha){
+  k = length(alpha)
+  draw = rep(0,k)
+  for(j in 1:k){
+    draw[j] = log_gamma(alpha[j])
+  }
+  lse = log_sum_exp(draw)
+  for(j in 1:k){
+    draw[j] = draw[j] - lse
+  }
+  return(draw)
+}
+
+
+draw_s = function(nv,theta = 1){
+  n   = length(nv)
+  theta_ = rep(0, n)
+  for(i in 1:n){
+    theta_[i] = theta/n + nv[i]
+  }
+  lpv = log_dirichilet(theta_)
+  return(lpv)
+}
+
+
+
+discrete = function(wts) {
+  p <- length(wts)
+  x <- 0
+  vOut <- rep(0, p)
+  vOut <- rmultinom(1, size = 1, prob = wts)
+  if (vOut[1] == 0) {
+    for (j in 2:p) {
+      x <- x + j * vOut[j]
+    }
+  }
+  return(x)
+}
+
+draw_theta0 = function(theta, lpv, a , b, rho) {
+  p      = length(lpv)
+  sumlpv = sum(lpv)
+  lambda_g <- seq(1 / 1001, 1000 / 1001, length.out = 1000)
+  theta_g <- lambda_g * rho / (1 - lambda_g)
+  lwt_g    = rep(0, 1000)
+  
+  for (k in 1:1000) {
+    theta_log_lik = lgamma(theta_g[k]) - p * lgamma(theta_g[k] / p) + (theta_g[k] / p) * sumlpv
+    beta_log_prior = (a - 1) * log(lambda_g[k]) + (b - 1) * log(1 - lambda_g[k])
+    lwt_g[k] = theta_log_lik + beta_log_prior
+  }
+  
+  lse <- log_sum_exp(lwt_g)
+  lwt_g <- exp(lwt_g - lse)
+  weights <- lwt_g / sum(lwt_g)
+  theta <- theta_g[discrete(weights)]
+  
+  return(theta)
+}
+
+
+
+

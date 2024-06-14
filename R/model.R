@@ -67,12 +67,13 @@ ForestModel <- R6::R6Class(
         #' @param leaf_model_int Integer specifying the leaf model type (0 = constant leaf, 1 = univariate leaf regression, 2 = multivariate leaf regression)
         #' @param leaf_model_scale Scale parameter used in the leaf node model (should be a q x q matrix where q is the dimensionality of the basis and is only >1 when `leaf_model_int = 2`)
         #' @param variable_weights Vector specifying sampling probability for all p covariates in `forest_dataset`
+        #' @param variable_count_splits ####
         #' @param global_scale Global variance parameter
         #' @param cutpoint_grid_size (Optional) Number of unique cutpoints to consider (default: 500, currently only used when `GFR = TRUE`)
         #' @param gfr (Optional) Whether or not the forest should be sampled using the "grow-from-root" (GFR) algorithm
         #' @param pre_initialized (Optional) Whether or not the leaves are pre-initialized outside of the sampling loop (before any samples are drawn). In multi-forest implementations like BCF, this is true, though in the single-forest supervised learning implementation, we can let C++ do the initialization. Default: F.
         sample_one_iteration = function(forest_dataset, residual, forest_samples, rng, feature_types, 
-                                        leaf_model_int, leaf_model_scale, variable_weights, 
+                                        leaf_model_int, leaf_model_scale, variable_weights, variable_count_splits, 
                                         global_scale, cutpoint_grid_size = 500, gfr = T, 
                                         pre_initialized = F) {
             if (gfr) {
@@ -87,7 +88,7 @@ ForestModel <- R6::R6Class(
                     forest_dataset$data_ptr, residual$data_ptr, 
                     forest_samples$forest_container_ptr, self$tracker_ptr, self$tree_prior_ptr,
                     rng$rng_ptr, feature_types, cutpoint_grid_size, leaf_model_scale, 
-                    variable_weights, global_scale, leaf_model_int, pre_initialized
+                    variable_weights, variable_count_splits, global_scale, leaf_model_int, pre_initialized
                 ) 
             }
         }
