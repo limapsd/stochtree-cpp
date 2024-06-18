@@ -5,18 +5,14 @@
 \title{Title}
 \usage{
 varbart(
-  y_train,
+  Y_train,
   X_train,
-  sv = FALSE,
-  W_train = NULL,
-  group_ids_train = NULL,
-  rfx_basis_train = NULL,
-  X_test = NULL,
-  W_test = NULL,
-  group_ids_test = NULL,
-  rfx_basis_test = NULL,
-  ordered_cat_vars = NULL,
-  unordered_cat_vars = NULL,
+  Yraw,
+  p,
+  fhorz,
+  Heteroskedacity_Model = "None",
+  Variable_Split_Prior = "Uniform",
+  Theta_Update = F,
   cutpoint_grid_size = 100,
   tau_init = NULL,
   alpha = 0.95,
@@ -24,8 +20,8 @@ varbart(
   min_samples_leaf = 5,
   output_dimension = 1,
   is_leaf_constant = T,
-  leaf_regression = F,
   nu = 3,
+  leaf_model = 0,
   lambda = NULL,
   a_leaf = 3,
   b_leaf = NULL,
@@ -33,36 +29,28 @@ varbart(
   sigma2_init = NULL,
   num_trees = 250,
   num_gfr = 0,
-  num_burnin = 0,
+  num_burnin = 250,
   num_mcmc = 100,
   random_seed = -1,
   keep_burnin = F
 )
 }
 \arguments{
-\item{y_train}{}
+\item{Y_train}{}
 
 \item{X_train}{}
 
-\item{sv}{}
+\item{Yraw}{}
 
-\item{W_train}{}
+\item{p}{}
 
-\item{group_ids_train}{}
+\item{fhorz}{}
 
-\item{rfx_basis_train}{}
+\item{Heteroskedacity_Model}{}
 
-\item{X_test}{}
+\item{Variable_Split_Prior}{}
 
-\item{W_test}{}
-
-\item{group_ids_test}{}
-
-\item{rfx_basis_test}{}
-
-\item{ordered_cat_vars}{}
-
-\item{unordered_cat_vars}{}
+\item{Theta_Update}{}
 
 \item{cutpoint_grid_size}{}
 
@@ -78,9 +66,9 @@ varbart(
 
 \item{is_leaf_constant}{}
 
-\item{leaf_regression}{}
-
 \item{nu}{}
+
+\item{leaf_model}{}
 
 \item{lambda}{}
 

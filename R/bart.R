@@ -339,10 +339,10 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                 current_sigma2, cutpoint_grid_size, gfr = F, pre_initialized = F
             )
           if(Sparse == TRUE){
-            lpv              = draw_s(variable_count_splits, theta)
+            lpv              = draw_probability_splits(variable_count_splits, theta)
             variable_weights = exp(lpv)
             if(Theta_Update == TRUE){
-              theta = draw_theta0(theta, lpv, 0.5, 1, rho = length(lpv))  
+              theta = draw_theta_update(theta, lpv, 0.5, 1, rho = length(lpv))  
             }
             
           }
@@ -667,84 +667,84 @@ getRandomEffectSamples.bartmodel <- function(object, ...){
 }
 
 
-
-
-
-log_sum_exp = function(v){
-  n = length(v)
-  mx = max(v)
-  sm = 0
-  for(i in 1:n){
-    sm = sm + exp(v[i] - mx)
-  }
-  return(mx + log(sm))
-}
-
-log_gamma = function(shape){
-  y = log(rgamma(1, shape+ 1))
-  z = log(runif(1))/shape
-  return(y+z)
-}
-
-log_dirichilet = function(alpha){
-  k = length(alpha)
-  draw = rep(0,k)
-  for(j in 1:k){
-    draw[j] = log_gamma(alpha[j])
-  }
-  lse = log_sum_exp(draw)
-  for(j in 1:k){
-    draw[j] = draw[j] - lse
-  }
-  return(draw)
-}
-
-
-draw_s = function(nv,theta = 1){
-  n   = length(nv)
-  theta_ = rep(0, n)
-  for(i in 1:n){
-    theta_[i] = theta/n + nv[i]
-  }
-  lpv = log_dirichilet(theta_)
-  return(lpv)
-}
-
-
-
-discrete = function(wts) {
-  p <- length(wts)
-  x <- 0
-  vOut <- rep(0, p)
-  vOut <- rmultinom(1, size = 1, prob = wts)
-  if (vOut[1] == 0) {
-    for (j in 2:p) {
-      x <- x + j * vOut[j]
-    }
-  }
-  return(x)
-}
-
-draw_theta0 = function(theta, lpv, a , b, rho) {
-  p      = length(lpv)
-  sumlpv = sum(lpv)
-  lambda_g <- seq(1 / 1001, 1000 / 1001, length.out = 1000)
-  theta_g <- lambda_g * rho / (1 - lambda_g)
-  lwt_g    = rep(0, 1000)
-  
-  for (k in 1:1000) {
-    theta_log_lik = lgamma(theta_g[k]) - p * lgamma(theta_g[k] / p) + (theta_g[k] / p) * sumlpv
-    beta_log_prior = (a - 1) * log(lambda_g[k]) + (b - 1) * log(1 - lambda_g[k])
-    lwt_g[k] = theta_log_lik + beta_log_prior
-  }
-  
-  lse <- log_sum_exp(lwt_g)
-  lwt_g <- exp(lwt_g - lse)
-  weights <- lwt_g / sum(lwt_g)
-  theta <- theta_g[discrete(weights)]
-  
-  return(theta)
-}
+# 
+# 
+# 
+# log_sum_exp = function(v){
+#   n = length(v)
+#   mx = max(v)
+#   sm = 0
+#   for(i in 1:n){
+#     sm = sm + exp(v[i] - mx)
+#   }
+#   return(mx + log(sm))
+# }
+# 
+# log_gamma = function(shape){
+#   y = log(rgamma(1, shape+ 1))
+#   z = log(runif(1))/shape
+#   return(y+z)
+# }
+# 
+# log_dirichilet = function(alpha){
+#   k = length(alpha)
+#   draw = rep(0,k)
+#   for(j in 1:k){
+#     draw[j] = log_gamma(alpha[j])
+#   }
+#   lse = log_sum_exp(draw)
+#   for(j in 1:k){
+#     draw[j] = draw[j] - lse
+#   }
+#   return(draw)
+# }
+# 
+# 
+# draw_s = function(nv,theta = 1){
+#   n   = length(nv)
+#   theta_ = rep(0, n)
+#   for(i in 1:n){
+#     theta_[i] = theta/n + nv[i]
+#   }
+#   lpv = log_dirichilet(theta_)
+#   return(lpv)
+# }
+# 
+# 
+# 
+# discrete = function(wts) {
+#   p <- length(wts)
+#   x <- 0
+#   vOut <- rep(0, p)
+#   vOut <- rmultinom(1, size = 1, prob = wts)
+#   if (vOut[1] == 0) {
+#     for (j in 2:p) {
+#       x <- x + j * vOut[j]
+#     }
+#   }
+#   return(x)
+# }
+# 
+# draw_theta0 = function(theta, lpv, a , b, rho) {
+#   p      = length(lpv)
+#   sumlpv = sum(lpv)
+#   lambda_g <- seq(1 / 1001, 1000 / 1001, length.out = 1000)
+#   theta_g <- lambda_g * rho / (1 - lambda_g)
+#   lwt_g    = rep(0, 1000)
+#   
+#   for (k in 1:1000) {
+#     theta_log_lik = lgamma(theta_g[k]) - p * lgamma(theta_g[k] / p) + (theta_g[k] / p) * sumlpv
+#     beta_log_prior = (a - 1) * log(lambda_g[k]) + (b - 1) * log(1 - lambda_g[k])
+#     lwt_g[k] = theta_log_lik + beta_log_prior
+#   }
+#   
+#   lse <- log_sum_exp(lwt_g)
+#   lwt_g <- exp(lwt_g - lse)
+#   weights <- lwt_g / sum(lwt_g)
+#   theta <- theta_g[discrete(weights)]
+#   
+#   return(theta)
+# }
 
 
 
