@@ -146,6 +146,7 @@ cpp11::writable::integers sample_mcmc_one_iteration_cpp(cpp11::external_pointer<
     
     for(int i =0; i<variable_count_splits.size();i++){
       variable_count_splits.at(i) = variable_count_splits_cpp.at(i);
+      int test = variable_count_splits.at(i);
     }
     
     return variable_count_splits;

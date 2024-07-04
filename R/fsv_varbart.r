@@ -28,28 +28,27 @@
 #' @param num_burnin 
 #' @param num_mcmc 
 #' @param random_seed 
-#' @param keep_burnin 
 #'
 #' @return
 #' @export
 #'
 #' @examples
-varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "None",
+fsv_varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "None",
                     Variable_Split_Prior = "Uniform", Theta_Update = F,   
                     cutpoint_grid_size = 100, tau_init = NULL, alpha = 0.95, 
                     beta = 2.0, min_samples_leaf = 5,  output_dimension = 1,
                     is_leaf_constant = T, nu = 3,leaf_model = 0,
                     lambda = NULL, a_leaf = 3, b_leaf = NULL, q = 0.9,
                     sigma2_init = NULL, num_trees = 250, num_gfr = 0, 
-                    num_burnin = 250, num_mcmc = 100, random_seed = -1,
-                    keep_burnin = F){
+                    num_burnin = 250, num_mcmc = 100, random_seed = -1){
+
   
   num_samples = num_burnin + num_mcmc 
-  
   Ymu = apply(Yraw, 2, mean, na.rm=T)
   Ysd = apply(Yraw, 2, sd, na.rm=T)
-  
-  M  = ncol(Y_train)
+
+
+  M = ncol(Y_train)
   TT = nrow(Y_train)
   K  = ncol(X_train)
   
@@ -57,19 +56,13 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
   index_names    = rownames(Y_train)
   feature_types  = rep(0, K)  
   colnames(X_train) = paste0(rep(variable_names, p),
-                         sort(rep(paste(".t-", sprintf("%02d", 1:p), sep = ""), each = M), decreasing = F), sep = "" )
+                             sort(rep(paste(".t-", sprintf("%02d", 1:p), sep = ""), each = M), decreasing = F), sep = "" )
   
-  #  Initialization as Maximum Likelihood Estimation 
-  XtX =  t(X_train) %*% X_train
-  XtY =  t(X_train) %*% Y_train
-
-  # beta_ols <- solve(crossprod(X_train)) %*% crossprod(X_train,Y_train)
-  # sigma2hat = crossprod(Y_train - X_train%*%beta_ols)/TT
-
-  beta_ols  = solve(XtX) %*% XtY
-  resid_mle = Y_train - X_train %*%beta_ols
-  sigma2hat = ( t(resid_mle)%*%(resid_mle) )/TT
-
+  #  Calibrate priors for sigma^2 and tau
+  
+  beta_ols <- solve(crossprod(X_train)) %*% crossprod(X_train,Y_train)
+  sigma2hat = crossprod(Y_train - X_train%*%beta_ols)/TT
+  
   quantile_cutoff <- 0.9
   if (is.null(lambda)) {
     lambda <- (sigma2hat*qgamma(1-quantile_cutoff,nu))/nu
@@ -80,14 +73,6 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
   current_leaf_scale <- as.matrix(tau_init)
   current_sigma2 <- sigma2_init
   
-# Now the time varying varyances, this will be used for the forecasting!
-  Sig_t = array(0, dim= c(TT,M,M))
-  
-  for(tt in 1:TT){
-    Sig_t[tt,,] = sigma2hat
-  } 
-  
-
   # Data 
   forest_dataset_train_ls = c()
   
@@ -97,30 +82,20 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
   
   # Sampling data structures
   feature_types <- as.integer(feature_types)
-  #outcome_train = createOutcome(Y[,1])
   
-  
-  # Variable selection weights
+# Variable selection weights
   variable_weights <- rep(1/K, K)
-  
+    
   #Variable Selection Splits
   variable_count_splits_ls  = matrix(0, nrow = M, ncol = K) 
   var_count_matrix = array(NA, dim =  c(num_samples, K, M) )
-  
-  lag_index = matrix(0,M,p) # For the minessota prior. 
-  for(i in 1:M){
-    lag_index[i,] = seq(i, K, by =M)
-  }
-
-  
-  
+    
   # Container of forest samples
   forest_samples_ls = c()
   bart_sampler_ls  = c()
   
   
-  for(mm in 1:M){
-    
+  for(mm in 1:M){    
     variable_count_splits_ls[mm,] =  as.integer(rep(0,K))
     #   outcome_train_ls  = c(outcome_train_ls ,createOutcome(Y[,mm]))
     forest_dataset_train_ls = c(forest_dataset_train_ls, stochtree::createForestDataset(X_train, basis = NULL, variance_weights = NULL) )
@@ -129,24 +104,42 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
                                                           feature_types, num_trees, nrow(X_train), alpha, beta,
                                                           min_samples_leaf)) 
   }
+
+###################################################################################
+################################## Covariance Objects #############################
+###################################################################################
+
+  # Time varying covariance matrix object that will be used in the forecasting!
+    Sig_t = array(0, dim= c(TT,M,M))
+    for(tt in 1:TT) Sig_t[tt,,] = sigma2hat
   
+  
+  # Factor Structure in the Errors 
+  
+  ledermann_bound <- function(m) { as.integer(floor((2*m+1)/2 - sqrt((2*m+1)^2/4 - m^2 + m))) }
+  Q = ledermann_bound(M)
+  if(Q==1 || Q == 0) Q = 2
+  Lambda =  matrix(0,nrow = M,ncol = Q)
+  Ft = prcomp(Y_train  - X_train%*%beta_ols)$x[,1:Q] #Extract the initizaling factors from the residuals. 
+  Omega = matrix(1, TT,Q)
+  id_Lambda <- matrix(TRUE,M,Q) # Identification, don't think this is necessary...
+  theta_Lambda <- Lambda^0
+  # HS prior for factor loadings (by column)
+  
+  lambda_Lambda = matrix(1,M,Q)
+  nu_Lambda = matrix(1,M,Q)
+  zeta_Lambda = rep(1,Q)
+  tau_Lambda  = rep(1,Q)
+
   #Initialization of Covariance Objects:
-  th_A0  = matrix(1,M,M)
   eta = matrix(NA, TT, M)
   H = matrix(-3, TT, M)
-  d.A0 = diag(M)
+
   sigma_mat = matrix(NA, M, 1)
   Y_fit_BART = Y_train*0
   
   #Dirichlet Initialization
   theta = 1
-  
-  # Init. for the Horseshoe:
-  lambda_A0 = 1
-  nu_A0 = 1
-  tau_A0 =1
-  zeta_A0 =1
-  prior_cov = rep(1, M*(M-1)/2)
   
   # Stochastic Volatility:
   sv_priors = list()
@@ -157,8 +150,27 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
   sv_params_mat <- matrix(NA, M, 4)
   colnames(sv_params_mat) = c("mu", "phi", "sigma","h")
   
+  fsv_priors = list()
+  fsv_draw = list()
+  fsv_h_latent = list()
 
-  if(Heteroskedacity_Model == "CSV"){
+  fsv_params_mcmc = array(NA, dim = c(num_samples, 4, Q))
+  fsv_params_mat  = matrix(NA, Q, 4)
+  colnames(fsv_params_mat) = c("mu", "phi", "sigma","h")
+
+
+  
+if(Heteroskedacity_Model == "FSV"){   
+    for(qq in 1:Q){
+        fsv_draw[[qq]] = list(mu = 0, phi = 0.99, sigma = 0.01, nu = Inf, rho = 0, beta = NA, latent0 = 0)
+        fsv_h_latent[[qq]] = rep(0,TT)
+        fsv_priors[[qq]] = stochvol::specify_priors(
+        mu = stochvol::sv_normal(mean = 0, sd = 1),
+        phi = stochvol::sv_beta(shape1 = 5, shape2 = 1.5),
+        sigma2 = stochvol::sv_gamma(shape = 0.5, rate = 1/(2*0.01)),
+        nu = stochvol::sv_infinity(),
+        rho = stochvol::sv_constant(0)) 
+    }
     for(mm in 1:M){
       sv_draw[[mm]] = list(mu = 0, phi = 0.99, sigma = 0.01, nu = Inf, rho = 0, beta = NA, latent0 = 0)
       h_latent[[mm]] = rep(0,TT)
@@ -169,6 +181,7 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
         nu     = stochvol::sv_infinity(),
         rho    = stochvol::sv_constant(0))
     }
+
   }else{
     for(mm in 1:M){
       sv_draw[[mm]]   = list(mu = 0, phi = 0.99, sigma = 0.01, nu = Inf, rho = 0, beta = NA, latent0 = 0)
@@ -180,8 +193,7 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
         nu     = stochvol::sv_infinity(),
         rho    = stochvol::sv_constant(0)
       )
-    }
-    
+    } 
   }
   
   
@@ -193,104 +205,65 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
   Y_store = array(NA, dim=c(num_samples, TT, M))
   H_store = array(NA, dim=c(num_samples, TT, M))
   Y_forecast_store = array(NA, dim = c(num_mcmc, fhorz, M) )
-  # variable_count_splits = as.integer(rep(0,ncol(X_train) ))
-  
+
   # Run MCMC
   
   pb = txtProgressBar(min = 0, max = num_samples, style = 3)
   start = Sys.time()
   
   for (i in (num_gfr+1):num_samples) {
+    for(mm in 1:M){  
+        # Sampling model Coefficients:
+        Y_ = Y_train - tcrossprod(Ft, Lambda)
+        outcome_train = createOutcome(Y_[,mm] - Y_fit_BART[,mm])
 
-    for(mm in 1:M){
-      
-      if(mm >1){
-        eta_mm = eta[,1:(mm -1), drop = FALSE]
-        A0_mm = d.A0[mm,1:(mm-1)]
-        outcome_train = createOutcome(Y_train[,mm] -Y_fit_BART[,mm]  - eta_mm%*%A0_mm)
-      }else{
-        outcome_train = createOutcome(Y_train[,1] - Y_fit_BART[,1])
-      }
-      
-      #Unpacking the objects for each equation:
-      variable_count_splits = as.integer(variable_count_splits_ls[mm,])
-      forest_samples = forest_samples_ls[[mm]] 
-      forest_model   = bart_sampler_ls[[mm]]
-      forest_dataset_train = forest_dataset_train_ls[[mm]]
-      
- 
-      variable_count_splits = forest_model$sample_one_iteration(
-        forest_dataset_train, outcome_train, forest_samples, rng,
-        feature_types, leaf_model, current_leaf_scale[mm,mm], variable_weights, variable_count_splits, 
-        current_sigma2[mm,mm], cutpoint_grid_size, gfr = FALSE, pre_initialized = FALSE)
-    
-      
-      if(i >= num_burnin/2){
-        if(Variable_Split_Prior == "Dirichlet"){
-          log_probability_values = draw_dart_splits(variable_count_splits, theta)
-          variable_weights = exp(log_probability_values)
-          if(Theta_Update == TRUE){
-            theta = draw_theta_update(theta, log_probability_values, 0.5, 1, rho = length(log_probability_values))  
-          }
-        }
-        if(Variable_Split_Prior == "Minn"){
-          lambda_1 = .4^2
-          lambda_2 = .4
-          log_probability_spits = draw_minessota_split(variable_count_splits, mm,lag_index ,diag(sigma2hat),lambda_1, lambda_2)
-          variable_weights = exp(log_probability_spits)
-        }
-      }
-      variable_count_splits_ls[mm,] = variable_count_splits
-      var_count_matrix[i,,mm] = variable_count_splits
+        ###################################################################################
+        ################################## Sampling BART Objects ##########################
+        ###################################################################################
 
-      leaf_scale_samples[i,mm] <- sample_tau_one_iteration(forest_samples, rng, a_leaf, b_leaf[mm,mm], i-1)
-      current_leaf_scale[mm,mm] <- as.matrix(leaf_scale_samples[i,mm])
-      global_var_samples[i,mm] <- sample_sigma2_one_iteration(outcome_train, rng, nu, lambda[mm,mm])
-      
-      current_sigma2[mm,mm] <- global_var_samples[i,mm]
-      sigma_mat[mm] = sqrt(global_var_samples[i,mm])
+        #Unpacking the objects for each equation:
+        variable_count_splits = as.integer(variable_count_splits_ls[mm,])
+        forest_samples = forest_samples_ls[[mm]] 
+        forest_model   = bart_sampler_ls[[mm]]
+        forest_dataset_train = forest_dataset_train_ls[[mm]]
 
-      # i -1 because indexing in cpp starts at 0
-      Y_fit_BART[,mm] = forest_samples$predict_raw_single_forest(forest_dataset_train, i-1)
-      
-      
-      #########################################################################################
-      ################################## Sampling A0 Objects ##################################
-      #########################################################################################      
-      # We follow Cogley and Sargent (2005), and write the residuals of yt - F(xt) = Ae_t. 
-      # Therefore we can estimate this as a SUR with independent standardize normal residuals A |Pi,Ht,yt ~ N()
-      
-      eta[,mm] = Y_train[,mm] -  Y_fit_BART[,mm]
-
-      if(mm >1){
-        norm_mm = as.numeric(exp(-.5*h_latent[[mm]]) * 1/sigma_mat[mm,]) 
-        z_mm    = eta[,1:(mm-1), drop =F] * norm_mm
-        eta_mm  = eta[,mm] * norm_mm       
-        if (mm == 2){
-          v0.inv = 1/th_A0[mm,1]
-        }else{
-          v0.inv = diag(1/th_A0[mm,1:(mm-1)])
-        } 
-        # V.cov = solve(crossprod(z_mm ) + v0.inv)
-        V_cov =  solve( t(z_mm)%*%z_mm + v0.inv)
-        # mu.cov = V.cov %*% crossprod(u_mm, eta_mm)
-        mu_cov = V_cov %*% t(z_mm)%*%eta_mm
-        a_draw = mu_cov + t(chol(V_cov)) %*% rnorm(ncol(V_cov)) 
-        d.A0[mm,1:(mm-1)] = a_draw
+        variable_count_splits = forest_model$sample_one_iteration(
+          forest_dataset_train, outcome_train, forest_samples, rng,
+          feature_types, leaf_model, current_leaf_scale[mm,mm], variable_weights, variable_count_splits, 
+          current_sigma2[mm,mm], cutpoint_grid_size, gfr = FALSE, pre_initialized = FALSE)
         
-      }
-      
+        if(i >= num_burnin/2){
+          if(Variable_Split_Prior == "Dirichlet"){
+            log_probability_values = draw_probability_splits(variable_count_splits, theta)
+            variable_weights = exp(log_probability_values)
+            print(variable_weights)
+            if(Theta_Update == TRUE){
+              theta = draw_theta_update(theta, log_probability_values, 0.5, 1, rho = length(log_probability_values))  
+            }
+          }
+        }  
+
+        var_count_matrix[i,,] = variable_count_splits
+        leaf_scale_samples[i,mm] <- sample_tau_one_iteration(forest_samples, rng, a_leaf, b_leaf[mm,mm], i-1)
+        current_leaf_scale[mm,mm] <- as.matrix(leaf_scale_samples[i,mm])
+        global_var_samples[i,mm] <- sample_sigma2_one_iteration(outcome_train, rng, nu, lambda[mm,mm])
+
+        current_sigma2[mm,mm] <- global_var_samples[i,mm]
+        sigma_mat[mm] = sqrt(global_var_samples[i,mm])
+        # i -1 because indexing in cpp starts at 0
+        Y_fit_BART[,mm] = forest_samples$predict_raw_single_forest(forest_dataset_train, i-1)
+        eta[,mm] = Y_[,mm] -  Y_fit_BART[,mm]
+
     }
-    
-    
-    shocks = eta %*%t(solve(d.A0))
-    
     #########################################################################################
     ################################## Sampling Covariance Objects ##########################
     #########################################################################################
-
+    norm_mm = as.numeric(exp(-.5*H[,mm]))
+    eta_mm  = eta[,mm]*norm_mm
+    
+    shocks = eta 
     for (mm in 1:M){
-      if(Heteroskedacity_Model == "CSV"){
+      if(Heteroskedacity_Model == "FSV"){
         svdraw_mm =  stochvol::svsample_general_cpp(shocks[,mm]/sigma_mat[mm], 
                                           startpara = sv_draw[[mm]], startlatent = h_latent[[mm]],
                                           priorspec = sv_priors[[mm]])
@@ -306,28 +279,50 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
       }
     }
     
+    
+    #########################################################################################
+    ################################## Sampling Factor and Loadings #########################
+    #########################################################################################
+    resid = Y_train - Y_fit_BART
+
+    Ft =  get_factors(resid,S=exp(H),H=exp(Omega),L=Lambda,q=Q,t=TT)
+    id.L <- FALSE # whether factor model for the errors should be identified
+    if(!id.L) Ft <- apply(Ft, 2, function(x) (x-mean(x))/sd(x)) # normalize factor draw
+    Lambda <- get_Lambda(resid, fac = Ft, S = exp(H), pr= theta_Lambda, m=M, q=Q, id.fac=!id_Lambda[1,Q])
+    
+    # Using a Horseshoe Prior on loadings by colums
+    for(qq in 1:Q){
+      hs_draw <- get_hs(bdraw=as.numeric(Lambda[id_Lambda[,qq],qq]),
+                        lambda.hs=as.numeric(lambda_Lambda[id_Lambda[,qq],qq]),
+                        nu.hs=nu_Lambda[id_Lambda[,qq],qq],tau.hs=tau_Lambda[qq],zeta.hs=zeta_Lambda[qq])
+      theta_Lambda[id_Lambda[,qq],qq] <- hs_draw$psi # Will be used in the loadings sampling
+      
+      lambda_Lambda[id_Lambda[,qq],qq] <- hs_draw$lambda
+      nu_Lambda[id_Lambda[,qq],qq] <- hs_draw$nu
+      tau_Lambda[qq] <- hs_draw$tau
+      zeta_Lambda[qq] <- hs_draw$zeta
+    }
+
+    # Sample Factor Variance
+    if(Heteroskedacity_Model == "FSV"){
+        for(qq in 1:Q){
+            fsvdraw_qq = stochvol::svsample_general_cpp(Ft[,qq], startpara = fsv_draw[[qq]], 
+                                              startlatent = fsv_h_latent[[qq]], priorspec = fsv_priors[[qq]])
+            fsv_draw[[qq]][c("mu", "phi", "sigma")] = as.list(fsvdraw_qq$para[, c("mu", "phi", "sigma")])
+            fsv_h_latent[[qq]] = fsvdraw_qq$latent
+            fsv_params_mat[qq, ] = c(fsvdraw_qq$para[, c("mu", "phi", "sigma")], fsvdraw_qq$latent[TT])
+            Omega[,qq] = fsvdraw_qq$latent
+      }
+    }else{
+        for(qq in 1:Q){
+            Omega[,qq] = 0
+        }
+    }
+
     for(tt in 1:TT){
-      aux_s = exp(H[tt,])
-      s_t  = t(d.A0) %*% diag(aux_s) %*% d.A0 
-      # s_t  =  t(d.A0)%*%crossprod(diag(aux_s), d.A0)
+      s_t = Lambda %*%diag( exp(Omega[tt,] ) ) %*%t(Lambda) + diag(exp(H[tt,]))
       Sig_t[tt,,] = s_t 
     }
-    
-    #########################################################################################
-    ##################### Sampling the Shrinkage Piror for the A0 matrix ####################
-    #########################################################################################
-    
-    hs_draw = get_hs(bdraw = d.A0[lower.tri(d.A0)],lambda.hs = lambda_A0, nu.hs = nu_A0,
-                     tau.hs = tau_A0, zeta.hs = zeta_A0)
-    lambda_A0 = hs_draw$lambda
-    nu_A0  = hs_draw$nu
-    tau_A0 = hs_draw$tau
-    zeta_A0   = hs_draw$zeta
-    prior_cov = hs_draw$psi
-    
-    th_A0[lower.tri(th_A0)] = prior_cov
-    th_A0[th_A0>10] = 10
-    th_A0[th_A0<1e-8] = 1e-8
     
     ################## Creating and Updating the Forecast ####################  
     
@@ -344,8 +339,9 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
         }
     
         forecast_dataset <- createForestDataset(X_hat)
-        if(Heteroskedacity_Model == "CSV"){
-          HT = H[TT,] - log(as.numeric(sigma_mat)^2)  
+        if(Heteroskedacity_Model == "FSV"){
+          HT = H[TT,] - log(as.numeric(sigma_mat)^2)
+          OT = Omega[TT,] 
         }else{
           HT = H[TT,]
         }
@@ -355,18 +351,20 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
        
         # Run Forecast Loop:
         for(hh in 1:fhorz){
-          HT  = log(as.numeric(sigma_mat)^2) + (sv_params_mat[, "mu"] + sv_params_mat[ , "phi"] * (HT - sv_params_mat[,"mu"]) + sv_params_mat[ , "sigma"]*rnorm(M))
+          HT  = log(as.numeric(sigma_mat)^2) + (sv_params_mat[, 1] + sv_params_mat[ , 2] * (HT - sv_params_mat[,1]) + sv_params_mat[ , 3]*rnorm(M))
+          OT  = (fsv_params_mat[, 1] + fsv_params_mat[ , 2] * (OT - fsv_params_mat[,1]) + fsv_params_mat[ , 3]*rnorm(Q))
           Hfc[hh,] = exp(HT)
-          
+        
           for(mm in 1:M){
             forest_samples = forest_samples_ls[[mm]] 
             forest_predictions[mm] = forest_samples$predict_raw_single_forest(forecast_dataset, i-1)
           }
           
-          if(Heteroskedacity_Model == "CSV"){
-            Sig_T = d.A0 %*%diag(exp(HT)) %*% t(d.A0)
+          if(Heteroskedacity_Model == "FSV"){
+            Sig_T = Lambda%*% diag(exp(OT)) %*% t(Lambda) + diag(exp(HT))
           }
-          Y_tp = as.numeric(forest_predictions) + t(chol(Sig_T)) %*%rnorm(M) # Sampling the Predictive Density. 
+          
+          Y_tp = as.numeric(forest_predictions) + t(chol(Sig_T)) %*%rnorm(M)
           if(p >1){
             X_hat = matrix(NA, nrow =1, ncol = K)
             X_hat[1,] = c(Y_tp, X_hat[,1: (M*(p-1) )] )
@@ -381,37 +379,30 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
       
         # Y_forecast_store[i,,] = (Yfch*t(matrix(Ysd,M,fhorz)))+t(matrix(Ymu,M,fhorz))
         Y_forecast_store[i - num_burnin,,]   = (Yfc*t(matrix(Ysd,M,fhorz)))+t(matrix(Ymu,M,fhorz))
+      }
     }
     
     
   
     
-  }
+    H_store[i,,]  = exp(H)
+    Y_store[i,,]  = (Y_fit_BART*t(matrix(Ysd,M,TT)))+t(matrix(Ymu,M,TT))
+    # Y_store[i,,]   = Y_fit_BART
+    iter_update = 250
+    setTxtProgressBar(pb, i)
+    if (i %% iter_update==0){
+      end =  Sys.time()
+      message(paste0("\n Average time for single draw over last ",iter_update," draws ",
+                     round(as.numeric(end-start)/iter_update, digits=4), " seconds, currently at draw ", i))
+      start = Sys.time() 
+    }
 
-  H_store[i,,]  = exp(H)
-  Y_store[i,,]  = (Y_fit_BART*t(matrix(Ysd,M,TT)))+t(matrix(Ymu,M,TT))
-  # Y_store[i,,]   = Y_fit_BART
-  iter_update = 250
-  setTxtProgressBar(pb, i)
-  if (i %% iter_update==0){
-    end =  Sys.time()
-    message(paste0("\n Average time for single draw over last ",iter_update," draws ",
-                   round(as.numeric(end-start)/iter_update, digits=4), " seconds, currently at draw ", i))
-    start = Sys.time() 
-  }
+    }
 
-  # dimnames(Y_store) = list(paste0("mcmc",1:num_samples),index_names,variable_names)
-  # dimnames(H_store) = list(paste0("mcmc",1:num_samples),index_names, variable_names)
-  # return_obj = list("Y.fitted" = Y_store, "H.fitted" = H_store, "Ysd" = Ysd, "Ymu" = Ymu,
-  #                    "sv.mcmc" = sv_params_mcmc, "A0" = d.A0)
-  
-  
-}
 
   dimnames(Y_store) = list(paste0("mcmc", 1:num_samples), index_names, variable_names)
   dimnames(H_store) = list(paste0("mcmc",1:num_samples),index_names, variable_names)
   dimnames(var_count_matrix) = list(paste0("mcmc", 1:num_samples), colnames(X_train), variable_names)
-  
   
   model_params <- list(
       "lags" = p,
@@ -429,12 +420,14 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
       "output_dimension" = output_dimension,
       "is_leaf_constant" = is_leaf_constant,
       "num_endogenous_variables" = M,
-      "num_covariates" = K,  
+      "num_covariates" = K,
+      "num_factors"  = Q, 
       "num_samples" = num_samples, 
       "num_gfr" = num_gfr, 
       "num_burnin" = num_burnin, 
       "num_mcmc" = num_mcmc, 
-      "sv_params_mcmc" = sv_params_mcmc
+      "sv_params_mcmc" = sv_params_mcmc,
+      "fsv_params_mcmc" = fsv_params_mcmc
   )
   result <- list(
       "forests" = forest_samples_ls, 
@@ -443,17 +436,12 @@ varbart =  function(Y_train, X_train, Yraw, p, fhorz, Heteroskedacity_Model = "N
       "y_forecast"     = Y_forecast_store,
       "H_matrix"       = H_store,
       "variable_count_splits" = var_count_matrix,
-      "A0_matrix" = d.A0
+      "Loadings" = Lambda
   )
-  
-  rm(forest_samples_ls)
-  rm(bart_sampler_ls)
-  rm(forest_dataset_train_ls)
-  rm(outcome_train)
-  rm(rng)
 
  return(result)
 }
+
 
 
 

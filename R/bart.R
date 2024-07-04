@@ -339,7 +339,7 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                 current_sigma2, cutpoint_grid_size, gfr = F, pre_initialized = F
             )
           if(Sparse == TRUE){
-            lpv              = draw_probability_splits(variable_count_splits, theta)
+            lpv              = draw_dart_splits(variable_count_splits, theta)
             variable_weights = exp(lpv)
             if(Theta_Update == TRUE){
               theta = draw_theta_update(theta, lpv, 0.5, 1, rho = length(lpv))  
@@ -347,6 +347,7 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
             
           }
           var_count_matrix[i,] = variable_count_splits
+          
             if (sample_sigma) {
                 global_var_samples[i] <- sample_sigma2_one_iteration(outcome_train, rng, nu, lambda)
                 current_sigma2 <- global_var_samples[i]
