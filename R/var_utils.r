@@ -3,11 +3,13 @@
 # function to draw the factor loadings (basic linear regression)
 
 get_facload <- function(yy,xx,l_sd){
-  
   V_prinv <- diag(NCOL(xx))/l_sd
-  V_lambda <- solve(crossprod(xx) + V_prinv)
+  V_lambda <- try(solve(crossprod(xx) + V_prinv))
+  if (is(V_lambda, "try-error")){
+    lambda_draw = matrix(rnorm(1), ncol = NCOL(xx), nrow = 1)
+    return(lambda_draw)
+  }
   lambda_mean <- V_lambda %*% (crossprod(xx,yy))
-  
   lambda_draw <- lambda_mean + t(chol(V_lambda)) %*% rnorm(NCOL(xx))
   return(lambda_draw)
 }
@@ -106,7 +108,7 @@ get_factors <- function(e,S,H,L,q,t){
 
 
 # -----------------------------------------------------------------------------------------------
-# function to draw the offdiagnoal horseshoe prior 
+# function to draw the off diagnoal horseshoe prior 
 ## Sample HS for a regression.
 
 #' Title
@@ -136,4 +138,27 @@ get_hs <- function(bdraw,lambda.hs,nu.hs,tau.hs,zeta.hs){
   
   ret <- list("psi"=(lambda.hs*tau.hs),"lambda"=lambda.hs,"tau"=tau.hs,"nu"=nu.hs,"zeta"=zeta.hs)
   return(ret)
+}
+
+# lag variables
+
+#' Title
+#'
+#' @param X 
+#' @param lag 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+mlag <- function(X,lag){
+  p <- lag
+  X <- as.matrix(X)
+  Traw <- nrow(X)
+  N <- ncol(X)
+  Xlag <- matrix(NA,Traw,p*N)
+  for (ii in 1:p){
+    Xlag[(p+1):Traw,(N*(ii-1)+1):(N*ii)]=X[(p+1-ii):(Traw-ii),(1:N)]
+  }
+  return(Xlag)
 }

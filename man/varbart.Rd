@@ -10,9 +10,16 @@ varbart(
   Yraw,
   p,
   fhorz,
-  Heteroskedacity_Model = "None",
-  Variable_Split_Prior = "Uniform",
-  Theta_Update = F,
+  Heteroskedacity_Model = "homo",
+  SUR = FALSE,
+  Variable_Split_Prior = "uniform",
+  Theta_Update = T,
+  a_dart = 0.5,
+  b_dart = 1,
+  rho_dart = NULL,
+  Lambda_Update = F,
+  a_minn = 0.5,
+  b_minn = 1,
   cutpoint_grid_size = 100,
   tau_init = NULL,
   alpha = 0.95,
@@ -48,9 +55,23 @@ varbart(
 
 \item{Heteroskedacity_Model}{}
 
+\item{SUR}{}
+
 \item{Variable_Split_Prior}{}
 
 \item{Theta_Update}{}
+
+\item{a_dart}{}
+
+\item{b_dart}{}
+
+\item{rho_dart}{}
+
+\item{Lambda_Update}{}
+
+\item{a_minn}{}
+
+\item{b_minn}{}
 
 \item{cutpoint_grid_size}{}
 

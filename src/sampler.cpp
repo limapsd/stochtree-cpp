@@ -124,7 +124,12 @@ cpp11::writable::integers sample_mcmc_one_iteration_cpp(cpp11::external_pointer<
     }
     
     // Converting to std::vector
-    std::vector<int32_t> variable_count_splits_cpp(variable_count_splits.begin(), variable_count_splits.end());
+    // std::vector<int32_t> variable_count_splits_cpp(variable_count_splits.begin(), variable_count_splits.end());
+    std::vector<int32_t> variable_count_splits_cpp(variable_count_splits.size());
+    
+    for (int i = 0; i < variable_count_splits.size(); i++){
+        variable_count_splits_cpp[i] =  variable_count_splits[i];
+    }
     // This should be better dealwith internally, like:
     //std::vector<int32_t> variable_count_splits(variable_weights.size()); 
 
@@ -146,7 +151,7 @@ cpp11::writable::integers sample_mcmc_one_iteration_cpp(cpp11::external_pointer<
     
     for(int i =0; i<variable_count_splits.size();i++){
       variable_count_splits.at(i) = variable_count_splits_cpp.at(i);
-      int test = variable_count_splits.at(i);
+    //   int test = variable_count_splits.at(i);
     }
     
     return variable_count_splits;

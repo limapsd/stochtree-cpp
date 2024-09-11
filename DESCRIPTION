@@ -31,6 +31,7 @@ Suggests:
 VignetteBuilder: knitr
 SystemRequirements: C++17
 Imports: 
-    R6
+    R6,
+    glmnet (>= 4.0.0)
 URL: https://stochastictree.github.io/stochtree-r/
 Config/testthat/edition: 3

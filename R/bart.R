@@ -42,6 +42,9 @@
 #' @param keep_gfr Whether or not "grow-from-root" samples should be included in cached predictions. Default TRUE. Ignored if num_mcmc = 0.
 #' @param Sparse Whether you want to turn on the dirichilet prior.
 #' @param Theta_Update Whether or not update the theta of the dirichilet prior. 
+#' @param a Parameters for the theta prior, controls sparsity.  a = 0.5 induces sparsity
+#' @param b Parameters for the theta prior, b = 1
+#' @param rho Parameter for the theta prior, rho is set it up to be equal to the number of covariates if not specified. less than that implies more sparsity.
 #' @return List of sampling outputs and a wrapper around the sampled forests (which can be used for in-memory prediction on new data, or serialized to JSON on disk).
 #' @export
 #'
@@ -79,7 +82,10 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                  num_burnin = 0, num_mcmc = 100, sample_sigma = T, 
                  sample_tau = T, random_seed = -1, keep_burnin = F, keep_gfr = F,
                  Sparse = F,
-                 Theta_Update = F){
+                 Theta_Update = F,
+                 a = 0.5,
+                 b = 1,
+                 rho = NULL){
     # Preprocess covariates
     if (!is.data.frame(X_train)) {
         stop("X_train must be a dataframe")
@@ -125,6 +131,8 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
             has_rfx_test <- T
         }
     }
+    
+    prob_matrix = matrix(0, num_samples, ncol(X_train))
     
     # Data consistency checks
     if ((!is.null(X_test)) && (ncol(X_test) != ncol(X_train))) {
@@ -194,7 +202,23 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
 
     # Calibrate priors for sigma^2 and tau
     reg_basis <- cbind(W_train, X_train)
-    sigma2hat <- (sigma(lm(resid_train~reg_basis)))^2
+    if(ncol(reg_basis) >nrow(reg_basis)){
+      weights_cv <- rep(1, length(resid_train))
+      stopifnot(is.matrix(reg_basis) | is.data.frame(reg_basis))
+      
+      if(is.data.frame(reg_basis)) {
+        reg_basis <- model.matrix(~.-1, data = reg_basis)
+      }
+      
+      fit <- glmnet::cv.glmnet(x = reg_basis, y = resid_train, weights = weights_cv)
+      fitted <- predict_glmnet(fit, reg_basis)
+      sigma2hat <- sqrt(mean((fitted - resid_train)^2))
+     
+    }else if(ncol(reg_basis) == nrow(reg_basis)){
+      sigma2hat <- var(resid_train)
+    }else{
+      sigma2hat <- (sigma(lm(resid_train~reg_basis)))^2  
+    }
     quantile_cutoff <- 0.9
     if (is.null(lambda)) {
         lambda <- (sigma2hat*qgamma(1-quantile_cutoff,nu))/nu
@@ -322,9 +346,17 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
     }
     
     #Dirichlet Initialization
-    theta = 1
+    theta   = 1
+    # theta_c = 1
+    # theta_compare = rep(0,num_samples)
+    theta_used    = rep(0, (floor(num_burnin/2) + num_mcmc))
+    lpvs = matrix(0, floor(num_burnin/2) + num_mcmc,ncol(X_train))
     
     # Run MCMC
+    
+    pb = txtProgressBar(min = 0, max = num_samples, style = 3)
+    start = Sys.time()
+    
     if (num_burnin + num_mcmc > 0) {
         if (num_burnin > 0) {
             burnin_indices = (num_gfr+1):(num_gfr+num_burnin)
@@ -338,14 +370,27 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                 leaf_model, current_leaf_scale, variable_weights, variable_count_splits, 
                 current_sigma2, cutpoint_grid_size, gfr = F, pre_initialized = F
             )
-          if(Sparse == TRUE){
-            lpv              = draw_dart_splits(variable_count_splits, theta)
-            variable_weights = exp(lpv)
-            if(Theta_Update == TRUE){
-              theta = draw_theta_update(theta, lpv, 0.5, 1, rho = length(lpv))  
-            }
+          if(i > floor(num_burnin/2) ){
+            if(Sparse == TRUE){
+              
+              # cat("Shape: ", shape, "\n")
+              lpv              = draw_dart_splits(variable_count_splits, theta)
+              lpvs[i-floor(num_burnin/2),] = lpv
+              variable_weights = exp(lpv)
+              prob_matrix[i-floor(num_burnin/2),]  = exp(lpv)
+              
+              if(Theta_Update == TRUE){
+              
+                if(is.null(rho)) rho = length(lpv)
+                theta = draw_alpha_update(theta, lpv, a, b, rho)
+                # theta = draw_theta_update(theta, lpv, a, b, rho)
+                
+              }
+              theta_used[i-floor(num_burnin/2)] = theta
             
+              }
           }
+          
           var_count_matrix[i,] = variable_count_splits
           
             if (sample_sigma) {
@@ -360,7 +405,18 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                 rfx_model$sample_random_effect(rfx_dataset_train, outcome_train, rfx_tracker_train, rfx_samples, current_sigma2, rng)
             }
           
+          iter_update = 250
+          setTxtProgressBar(pb, i)
+          if (i %% iter_update==0){
+            end =  Sys.time()
+            message(paste0("\n Average time for single draw over last ",iter_update," draws ",
+                           round(as.numeric(end-start)/iter_update, digits=4), " seconds, currently at draw ", i))
+            start = Sys.time() 
+          }
+          
         }
+      
+      
     }
     
     # Forest predictions
@@ -442,7 +498,10 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
         "num_rfx_basis" = num_basis_rfx, 
         "sample_sigma" = sample_sigma,
         "sample_tau" = sample_tau,
-        "variable_count_splits" =var_count_matrix
+        "variable_count_splits" =var_count_matrix,
+        "theta_used" = theta_used,
+        "prob_matrix" = prob_matrix,
+        "lpvs" = lpvs
     )
     result <- list(
         "forests" = forest_samples, 
@@ -593,7 +652,7 @@ predict.bartmodel <- function(bart, X_test, W_test = NULL, group_ids_test = NULL
         result <- list(
             "forest_predictions" = forest_predictions, 
             "rfx_predictions" = rfx_predictions, 
-            "y_hat" = y_hat, 
+            "y_hat" = y_hat
         )
         return(result)
     } else {
@@ -668,85 +727,15 @@ getRandomEffectSamples.bartmodel <- function(object, ...){
 }
 
 
-# 
-# 
-# 
-# log_sum_exp = function(v){
-#   n = length(v)
-#   mx = max(v)
-#   sm = 0
-#   for(i in 1:n){
-#     sm = sm + exp(v[i] - mx)
-#   }
-#   return(mx + log(sm))
-# }
-# 
-# log_gamma = function(shape){
-#   y = log(rgamma(1, shape+ 1))
-#   z = log(runif(1))/shape
-#   return(y+z)
-# }
-# 
-# log_dirichilet = function(alpha){
-#   k = length(alpha)
-#   draw = rep(0,k)
-#   for(j in 1:k){
-#     draw[j] = log_gamma(alpha[j])
-#   }
-#   lse = log_sum_exp(draw)
-#   for(j in 1:k){
-#     draw[j] = draw[j] - lse
-#   }
-#   return(draw)
-# }
-# 
-# 
-# draw_s = function(nv,theta = 1){
-#   n   = length(nv)
-#   theta_ = rep(0, n)
-#   for(i in 1:n){
-#     theta_[i] = theta/n + nv[i]
-#   }
-#   lpv = log_dirichilet(theta_)
-#   return(lpv)
-# }
-# 
-# 
-# 
-# discrete = function(wts) {
-#   p <- length(wts)
-#   x <- 0
-#   vOut <- rep(0, p)
-#   vOut <- rmultinom(1, size = 1, prob = wts)
-#   if (vOut[1] == 0) {
-#     for (j in 2:p) {
-#       x <- x + j * vOut[j]
-#     }
-#   }
-#   return(x)
-# }
-# 
-# draw_theta0 = function(theta, lpv, a , b, rho) {
-#   p      = length(lpv)
-#   sumlpv = sum(lpv)
-#   lambda_g <- seq(1 / 1001, 1000 / 1001, length.out = 1000)
-#   theta_g <- lambda_g * rho / (1 - lambda_g)
-#   lwt_g    = rep(0, 1000)
-#   
-#   for (k in 1:1000) {
-#     theta_log_lik = lgamma(theta_g[k]) - p * lgamma(theta_g[k] / p) + (theta_g[k] / p) * sumlpv
-#     beta_log_prior = (a - 1) * log(lambda_g[k]) + (b - 1) * log(1 - lambda_g[k])
-#     lwt_g[k] = theta_log_lik + beta_log_prior
-#   }
-#   
-#   lse <- log_sum_exp(lwt_g)
-#   lwt_g <- exp(lwt_g - lse)
-#   weights <- lwt_g / sum(lwt_g)
-#   theta <- theta_g[discrete(weights)]
-#   
-#   return(theta)
-# }
-
-
-
-
+predict_glmnet <- function (object, newx, s = c("lambda.1se", "lambda.min"), ...) 
+{
+  if (is.numeric(s)) 
+    lambda = s
+  else if (is.character(s)) {
+    s = match.arg(s)
+    lambda = object[[s]]
+    names(lambda) = s
+  }
+  else stop("Invalid form for s")
+  predict(object$glmnet.fit, newx, s = lambda, ...)
+}

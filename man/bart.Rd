@@ -36,7 +36,10 @@ bart(
   keep_burnin = F,
   keep_gfr = F,
   Sparse = F,
-  Theta_Update = F
+  Theta_Update = F,
+  a = 0.5,
+  b = 1,
+  rho = NULL
 )
 }
 \arguments{
@@ -110,6 +113,12 @@ that were not in the training set.}
 \item{Sparse}{Whether you want to turn on the dirichilet prior.}
 
 \item{Theta_Update}{Whether or not update the theta of the dirichilet prior.}
+
+\item{a}{Parameters for the theta prior, controls sparsity.  a = 0.5 induces sparsity}
+
+\item{b}{Parameters for the theta prior, b = 1}
+
+\item{rho}{Parameter for the theta prior, rho is set it up to be equal to the number of covariates if not specified. less than that implies more sparsity.}
 
 \item{variable_weights}{Vector of length \code{ncol(X_train)} indicating a "weight" placed on each
 variable for sampling purposes. Default: \code{rep(1/ncol(X_train),ncol(X_train))}.}
