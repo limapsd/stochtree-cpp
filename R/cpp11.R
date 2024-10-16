@@ -284,6 +284,14 @@ sample_tau_one_iteration_cpp <- function(forest_samples, rng, a, b, sample_num) 
   .Call(`_stochtree_sample_tau_one_iteration_cpp`, forest_samples, rng, a, b, sample_num)
 }
 
+sample_dart_splits_one_iteration_cpp <- function(variable_count_splits, alpha, rng) {
+  .Call(`_stochtree_sample_dart_splits_one_iteration_cpp`, variable_count_splits, alpha, rng)
+}
+
+sample_alpha_one_iteration_cpp <- function(log_prob_vector, a, b, rho, rng) {
+  .Call(`_stochtree_sample_alpha_one_iteration_cpp`, log_prob_vector, a, b, rho, rng)
+}
+
 rng_cpp <- function(random_seed) {
   .Call(`_stochtree_rng_cpp`, random_seed)
 }

@@ -12,7 +12,7 @@
 #include <sstream>
 #include <unordered_map>
 
-namespace StochTree {
+namespace StochTree { 
 
 ForestTracker::ForestTracker(Eigen::MatrixXd& covariates, std::vector<FeatureType>& feature_types, int num_trees, int num_observations) {
   sample_pred_mapper_ = std::make_unique<SamplePredMapper>(num_trees, num_observations);

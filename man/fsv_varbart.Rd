@@ -5,16 +5,18 @@
 \title{Title}
 \usage{
 fsv_varbart(
-  Y_train,
-  X_train,
   Yraw,
   p,
   fhorz,
-  Heteroskedacity_Model = "Homo",
-  Variable_Split_Prior = "Uniform",
+  Heteroskedacity_Model = "homo",
+  Variable_Split_Prior = "uniform",
+  a_dart = 0.5,
+  b_dart = 1,
+  rho_dart = NULL,
   Theta_Update = F,
   lambda_1 = 1,
   lambda_2 = 1,
+  Lambda_Update = F,
   cutpoint_grid_size = 100,
   tau_init = NULL,
   alpha = 0.95,
@@ -37,10 +39,6 @@ fsv_varbart(
 )
 }
 \arguments{
-\item{Y_train}{}
-
-\item{X_train}{}
-
 \item{Yraw}{}
 
 \item{p}{}
@@ -51,7 +49,19 @@ fsv_varbart(
 
 \item{Variable_Split_Prior}{}
 
+\item{a_dart}{}
+
+\item{b_dart}{}
+
+\item{rho_dart}{}
+
 \item{Theta_Update}{}
+
+\item{lambda_1}{}
+
+\item{lambda_2}{}
+
+\item{Lambda_Update}{}
 
 \item{cutpoint_grid_size}{}
 

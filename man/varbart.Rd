@@ -5,8 +5,6 @@
 \title{Title}
 \usage{
 varbart(
-  Y_train,
-  X_train,
   Yraw,
   p,
   fhorz,
@@ -18,6 +16,8 @@ varbart(
   b_dart = 1,
   rho_dart = NULL,
   Lambda_Update = F,
+  lambda_1 = NULL,
+  lambda_2 = NULL,
   a_minn = 0.5,
   b_minn = 1,
   cutpoint_grid_size = 100,
@@ -43,10 +43,6 @@ varbart(
 )
 }
 \arguments{
-\item{Y_train}{}
-
-\item{X_train}{}
-
 \item{Yraw}{}
 
 \item{p}{}
@@ -68,6 +64,10 @@ varbart(
 \item{rho_dart}{}
 
 \item{Lambda_Update}{}
+
+\item{lambda_1}{}
+
+\item{lambda_2}{}
 
 \item{a_minn}{}
 

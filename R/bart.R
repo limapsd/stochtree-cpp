@@ -346,11 +346,16 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
     }
     
     #Dirichlet Initialization
-    theta   = 1
+    alpha   = 1
     # theta_c = 1
     # theta_compare = rep(0,num_samples)
-    theta_used    = rep(0, (floor(num_burnin/2) + num_mcmc))
+    
     lpvs = matrix(0, floor(num_burnin/2) + num_mcmc,ncol(X_train))
+    loglikes_m = matrix(0, floor(num_burnin/2) + num_mcmc,1000)
+    
+    alpha_used    = rep(0, (floor(num_burnin/2) + num_mcmc))
+    lse_dir    = rep(0, (floor(num_burnin/2) + num_mcmc))
+    lse_alpha    = rep(0, (floor(num_burnin/2) + num_mcmc))
     
     # Run MCMC
     
@@ -373,20 +378,31 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
           if(i > floor(num_burnin/2) ){
             if(Sparse == TRUE){
               
-              # cat("Shape: ", shape, "\n")
-              lpv              = draw_dart_splits(variable_count_splits, theta)
+              # # cat("Shape: ", shape, "\n")
+              # lpv              = draw_dart_splits(variable_count_splits, theta)
+              # lpvs[i-floor(num_burnin/2),] = lpv
+              # variable_weights = exp(lpv)
+              # prob_matrix[i-floor(num_burnin/2),]  = exp(lpv)
+             
+              dart_sampler = sample_dart_splits_one_iteration(variable_count_splits, alpha, rng)
+              lpv = dart_sampler$lpv
+              
+              
+              lse_dir[i-floor(num_burnin/2)] = dart_sampler$lse_dir
               lpvs[i-floor(num_burnin/2),] = lpv
+              
               variable_weights = exp(lpv)
-              prob_matrix[i-floor(num_burnin/2),]  = exp(lpv)
+              prob_matrix[i-floor(num_burnin/2),]  = variable_weights 
               
               if(Theta_Update == TRUE){
               
-                if(is.null(rho)) rho = length(lpv)
-                theta = draw_alpha_update(theta, lpv, a, b, rho)
-                # theta = draw_theta_update(theta, lpv, a, b, rho)
-                
+              if(is.null(rho)) rho = length(lpv)
+               alpha_sampler = sample_alpha_one_iteration(lpv, a, b, rho, rng)
+               alpha = alpha_sampler$alpha
               }
-              theta_used[i-floor(num_burnin/2)] = theta
+              alpha_used[i-floor(num_burnin/2)]  = alpha
+              lse_alpha[i-floor(num_burnin/2)]   = alpha_sampler$lse_alpha 
+              loglikes_m[i-floor(num_burnin/2),] = alpha_sampler$loglikes
             
               }
           }
@@ -499,9 +515,12 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
         "sample_sigma" = sample_sigma,
         "sample_tau" = sample_tau,
         "variable_count_splits" =var_count_matrix,
-        "theta_used" = theta_used,
+        "theta_used" = alpha_used,
         "prob_matrix" = prob_matrix,
-        "lpvs" = lpvs
+        "lpvs" = lpvs,
+        "lse_alpha"  = lse_alpha,
+        "lse_dir"    = lse_dir,
+        "loglikes_m" = loglikes_m
     )
     result <- list(
         "forests" = forest_samples, 
