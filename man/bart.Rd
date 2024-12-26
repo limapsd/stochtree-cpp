@@ -16,6 +16,8 @@ bart(
   rfx_basis_test = NULL,
   cutpoint_grid_size = 100,
   tau_init = NULL,
+  alpha_x = 0.95,
+  beta_x = 2,
   alpha = 0.95,
   beta = 2,
   min_samples_leaf = 5,
@@ -73,6 +75,10 @@ that were not in the training set.}
 \item{cutpoint_grid_size}{Maximum size of the "grid" of potential cutpoints to consider. Default: 100.}
 
 \item{tau_init}{Starting value of leaf node scale parameter. Calibrated internally as \code{1/num_trees} if not set here.}
+
+\item{alpha_x}{Prior probability of splitting for a tree of depth 0. Tree split prior combines \code{alpha} and \code{beta} via \code{alpha*(1+node_depth)^-beta} for the warmstart xbart.}
+
+\item{beta_x}{Exponent that decreases split probabilities for nodes of depth > 0. Tree split prior combines \code{alpha} and \code{beta} via \code{alpha*(1+node_depth)^-beta} for the warmstart xbart.}
 
 \item{alpha}{Prior probability of splitting for a tree of depth 0. Tree split prior combines \code{alpha} and \code{beta} via \code{alpha*(1+node_depth)^-beta}.}
 

@@ -22,6 +22,8 @@ trees, and exposes functionality to run a forest sampler
 \itemize{
 \item \href{#method-ForestModel-new}{\code{ForestModel$new()}}
 \item \href{#method-ForestModel-sample_one_iteration}{\code{ForestModel$sample_one_iteration()}}
+\item \href{#method-ForestModel-update_alpha}{\code{ForestModel$update_alpha()}}
+\item \href{#method-ForestModel-update_beta}{\code{ForestModel$update_beta()}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -118,6 +120,46 @@ Run a single iteration of the forest sampling algorithm (MCMC or GFR)
 \item{\code{pre_initialized}}{(Optional) Whether or not the leaves are pre-initialized outside of the sampling loop (before any samples are drawn). In multi-forest implementations like BCF, this is true, though in the single-forest supervised learning implementation, we can let C++ do the initialization. Default: F.}
 }
 \if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-update_alpha"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-update_alpha}{}}}
+\subsection{Method \code{update_alpha()}}{
+Update alpha in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$update_alpha(alpha)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{alpha}}{New value of alpha to be used}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+NULL
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-update_beta"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-update_beta}{}}}
+\subsection{Method \code{update_beta()}}{
+Update beta in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$update_beta(beta)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{beta}}{New value of beta to be used}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+NULL
 }
 }
 }

@@ -81,7 +81,7 @@ ForestModel <- R6::R6Class(
                     forest_dataset$data_ptr, residual$data_ptr, 
                     forest_samples$forest_container_ptr, self$tracker_ptr, self$tree_prior_ptr, 
                     rng$rng_ptr, feature_types, cutpoint_grid_size, leaf_model_scale, 
-                    variable_weights, global_scale, leaf_model_int, pre_initialized
+                    variable_weights,variable_count_splits,global_scale, leaf_model_int, pre_initialized
                 )
             } else {
                 sample_mcmc_one_iteration_cpp(
@@ -91,7 +91,23 @@ ForestModel <- R6::R6Class(
                     variable_weights, variable_count_splits, global_scale, leaf_model_int, pre_initialized
                 ) 
             }
-        }
+        },
+        
+        #' @description
+        #' Update alpha in the tree prior
+        #' @param alpha New value of alpha to be used
+        #' @return NULL
+        update_alpha = function(alpha) {
+            update_alpha_tree_prior_cpp(self$tree_prior_ptr, alpha)
+        },
+         #' @description
+        #' Update beta in the tree prior
+        #' @param beta New value of beta to be used
+        #' @return NULL
+        update_beta = function(beta) {
+            update_beta_tree_prior_cpp(self$tree_prior_ptr, beta)
+        } 
+
     )
 )
 

@@ -1,18 +1,30 @@
 
 # -----------------------------------------------------------------------------------------------
 # function to draw the factor loadings (basic linear regression)
+# 
+# get_facload <- function(yy,xx,l_sd){
+#   V_prinv <- diag(NCOL(xx))/l_sd
+#   V_lambda <- try(solve(crossprod(xx) + V_prinv))
+#   if (is(V_lambda, "try-error")){
+#     lambda_draw = matrix(rnorm(1), ncol = NCOL(xx), nrow = 1)
+#     return(lambda_draw)
+#   }
+#   lambda_mean <- V_lambda %*% (crossprod(xx,yy))
+#   lambda_draw <- lambda_mean + t(chol(V_lambda)) %*% rnorm(NCOL(xx))
+#   return(lambda_draw)
+# }
 
 get_facload <- function(yy,xx,l_sd){
   V_prinv <- diag(NCOL(xx))/l_sd
-  V_lambda <- try(solve(crossprod(xx) + V_prinv))
-  if (is(V_lambda, "try-error")){
-    lambda_draw = matrix(rnorm(1), ncol = NCOL(xx), nrow = 1)
-    return(lambda_draw)
-  }
+  V_lambda <- solve(crossprod(xx) + V_prinv)
   lambda_mean <- V_lambda %*% (crossprod(xx,yy))
+  
   lambda_draw <- lambda_mean + t(chol(V_lambda)) %*% rnorm(NCOL(xx))
   return(lambda_draw)
 }
+
+
+
 
 # factor loadings draw
 #' Title

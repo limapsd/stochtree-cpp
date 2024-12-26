@@ -22,6 +22,8 @@
 #' variable for sampling purposes. Default: `rep(1/ncol(X_train),ncol(X_train))`.
 #' @param cutpoint_grid_size Maximum size of the "grid" of potential cutpoints to consider. Default: 100.
 #' @param tau_init Starting value of leaf node scale parameter. Calibrated internally as `1/num_trees` if not set here.
+#' @param alpha_x Prior probability of splitting for a tree of depth 0. Tree split prior combines `alpha` and `beta` via `alpha*(1+node_depth)^-beta` for the warmstart xbart.
+#' @param beta_x Exponent that decreases split probabilities for nodes of depth > 0. Tree split prior combines `alpha` and `beta` via `alpha*(1+node_depth)^-beta` for the warmstart xbart.
 #' @param alpha Prior probability of splitting for a tree of depth 0. Tree split prior combines `alpha` and `beta` via `alpha*(1+node_depth)^-beta`.
 #' @param beta Exponent that decreases split probabilities for nodes of depth > 0. Tree split prior combines `alpha` and `beta` via `alpha*(1+node_depth)^-beta`.
 #' @param min_samples_leaf Minimum allowable size of a leaf, in terms of training samples. Default: 5.
@@ -75,7 +77,8 @@
 bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL, 
                  rfx_basis_train = NULL, X_test = NULL, W_test = NULL, 
                  group_ids_test = NULL, rfx_basis_test = NULL, 
-                 cutpoint_grid_size = 100, tau_init = NULL, alpha = 0.95, 
+                 cutpoint_grid_size = 100, tau_init = NULL, alpha_x = 0.95, 
+                 beta_x = 2.0, alpha = 0.95, 
                  beta = 2.0, min_samples_leaf = 5, leaf_model = 0, 
                  nu = 3, lambda = NULL, a_leaf = 3, b_leaf = NULL, 
                  q = 0.9, sigma2_init = NULL, num_trees = 200, num_gfr = 5, 
@@ -131,8 +134,6 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
             has_rfx_test <- T
         }
     }
-    
-    prob_matrix = matrix(0, num_samples, ncol(X_train))
     
     # Data consistency checks
     if ((!is.null(X_test)) && (ncol(X_test) != ncol(X_train))) {
@@ -275,7 +276,7 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
     
     # Sampling data structures
     feature_types <- as.integer(feature_types)
-    forest_model <- createForestModel(forest_dataset_train, feature_types, num_trees, nrow(X_train), alpha, beta, min_samples_leaf)
+    forest_model <- createForestModel(forest_dataset_train, feature_types, num_trees, nrow(X_train), alpha_x, beta_x, min_samples_leaf)
     
     # Container of forest samples
     forest_samples <- createForestContainer(num_trees, output_dimension, is_leaf_constant)
@@ -320,15 +321,20 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
     
     #Variable Selection Splits
     variable_count_splits <- as.integer(rep(0, ncol(X_train)))
+    variable_count_splits_xbart <- as.integer(rep(0, ncol(X_train)))
     var_count_matrix = matrix(NA, nrow = num_samples, ncol =  ncol(X_train))
-    
+    prob_matrix = matrix(0, num_samples, ncol(X_train))
     # Run GFR (warm start) if specified
+    
+    pb = txtProgressBar(min = 0, max = num_samples, style = 3)
+    start = Sys.time()
+    
     if (num_gfr > 0){
         gfr_indices = 1:num_gfr
         for (i in 1:num_gfr) {
-            forest_model$sample_one_iteration(
+          variable_count_splits_xbart = forest_model$sample_one_iteration(
                 forest_dataset_train, outcome_train, forest_samples, rng, feature_types, 
-                leaf_model, current_leaf_scale, variable_weights, variable_count_splits, 
+                leaf_model, current_leaf_scale, variable_weights, variable_count_splits_xbart, 
                 current_sigma2, cutpoint_grid_size, gfr = T, pre_initialized = F
             )
             if (sample_sigma) {
@@ -343,24 +349,27 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                 rfx_model$sample_random_effect(rfx_dataset_train, outcome_train, rfx_tracker_train, rfx_samples, current_sigma2, rng)
             }
         }
+        variable_count_splits = as.integer(floor(variable_count_splits_xbart/num_trees))
+        
+        forest_model$update_alpha(alpha)
+        forest_model$update_beta(beta)
     }
+    
+    
     
     #Dirichlet Initialization
     alpha   = 1
     # theta_c = 1
     # theta_compare = rep(0,num_samples)
+    # browser()
+    lpvs = matrix(0, floor((num_gfr+num_burnin)/2) + num_mcmc,ncol(X_train))
+    loglikes_m = matrix(0, floor((num_gfr+num_burnin)/2) + num_mcmc,1000)
     
-    lpvs = matrix(0, floor(num_burnin/2) + num_mcmc,ncol(X_train))
-    loglikes_m = matrix(0, floor(num_burnin/2) + num_mcmc,1000)
-    
-    alpha_used    = rep(0, (floor(num_burnin/2) + num_mcmc))
-    lse_dir    = rep(0, (floor(num_burnin/2) + num_mcmc))
-    lse_alpha    = rep(0, (floor(num_burnin/2) + num_mcmc))
+    alpha_used    = rep(0, (floor((num_gfr+num_burnin)/2) + num_mcmc))
+    lse_dir    = rep(0, (floor((num_gfr+num_burnin)/2) + num_mcmc))
+    lse_alpha    = rep(0, (floor((num_gfr+num_burnin)/2) + num_mcmc))
     
     # Run MCMC
-    
-    pb = txtProgressBar(min = 0, max = num_samples, style = 3)
-    start = Sys.time()
     
     if (num_burnin + num_mcmc > 0) {
         if (num_burnin > 0) {
@@ -375,7 +384,7 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                 leaf_model, current_leaf_scale, variable_weights, variable_count_splits, 
                 current_sigma2, cutpoint_grid_size, gfr = F, pre_initialized = F
             )
-          if(i > floor(num_burnin/2) ){
+          if(i > floor((num_gfr+num_burnin)/2) ){
             if(Sparse == TRUE){
               
               # # cat("Shape: ", shape, "\n")
@@ -388,11 +397,11 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
               lpv = dart_sampler$lpv
               
               
-              lse_dir[i-floor(num_burnin/2)] = dart_sampler$lse_dir
-              lpvs[i-floor(num_burnin/2),] = lpv
+              lse_dir[i-floor((num_gfr+num_burnin)/2)] = dart_sampler$lse_dir
+              lpvs[i-floor((num_gfr+num_burnin)/2),] = lpv
               
               variable_weights = exp(lpv)
-              prob_matrix[i-floor(num_burnin/2),]  = variable_weights 
+              prob_matrix[i-floor((num_gfr+num_burnin)/2),]  = variable_weights 
               
               if(Theta_Update == TRUE){
               
@@ -400,9 +409,9 @@ bart <- function(X_train, y_train, W_train = NULL, group_ids_train = NULL,
                alpha_sampler = sample_alpha_one_iteration(lpv, a, b, rho, rng)
                alpha = alpha_sampler$alpha
               }
-              alpha_used[i-floor(num_burnin/2)]  = alpha
-              lse_alpha[i-floor(num_burnin/2)]   = alpha_sampler$lse_alpha 
-              loglikes_m[i-floor(num_burnin/2),] = alpha_sampler$loglikes
+              alpha_used[i-floor((num_gfr+num_burnin)/2)]  = alpha
+              lse_alpha[i-floor((num_gfr+num_burnin)/2)]   = alpha_sampler$lse_alpha 
+              loglikes_m[i-floor((num_gfr+num_burnin)/2),] = alpha_sampler$loglikes
             
               }
           }

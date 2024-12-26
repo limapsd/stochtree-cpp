@@ -8,15 +8,14 @@ fsv_varbart(
   Yraw,
   p,
   fhorz,
-  Heteroskedacity_Model = "homo",
-  Variable_Split_Prior = "uniform",
+  sv = "none",
+  bart_prior = "standard",
   a_dart = 0.5,
   b_dart = 1,
   rho_dart = NULL,
-  Theta_Update = F,
   lambda_1 = 1,
   lambda_2 = 1,
-  Lambda_Update = F,
+  lambda_update = F,
   cutpoint_grid_size = 100,
   tau_init = NULL,
   alpha = 0.95,
@@ -29,12 +28,11 @@ fsv_varbart(
   lambda = NULL,
   a_leaf = 3,
   b_leaf = NULL,
-  q = 0.9,
   sigma2_init = NULL,
   num_trees = 250,
-  num_gfr = 0,
   num_burnin = 250,
   num_mcmc = 100,
+  num_thin = 1,
   random_seed = -1
 )
 }
@@ -45,9 +43,7 @@ fsv_varbart(
 
 \item{fhorz}{}
 
-\item{Heteroskedacity_Model}{}
-
-\item{Variable_Split_Prior}{}
+\item{sv}{}
 
 \item{a_dart}{}
 
@@ -55,13 +51,9 @@ fsv_varbart(
 
 \item{rho_dart}{}
 
-\item{Theta_Update}{}
-
 \item{lambda_1}{}
 
 \item{lambda_2}{}
-
-\item{Lambda_Update}{}
 
 \item{cutpoint_grid_size}{}
 
@@ -87,19 +79,25 @@ fsv_varbart(
 
 \item{b_leaf}{}
 
-\item{q}{}
-
 \item{sigma2_init}{}
 
 \item{num_trees}{}
-
-\item{num_gfr}{}
 
 \item{num_burnin}{}
 
 \item{num_mcmc}{}
 
 \item{random_seed}{}
+
+\item{Variable_Split_Prior}{}
+
+\item{Theta_Update}{}
+
+\item{Lambda_Update}{}
+
+\item{q}{}
+
+\item{num_gfr}{}
 }
 \description{
 Title

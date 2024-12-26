@@ -4,7 +4,7 @@
 \alias{draw_minessota_split}
 \title{Title}
 \usage{
-draw_minessota_split(nv, m_i, lag_index, sigma_ols, lambda_1, lambda_2)
+draw_minessota_split(nv, m_i, lag_index, sigma_ols, lambda_1, lambda_2, rng)
 }
 \arguments{
 \item{nv}{Vector with the number of splits for each variable}
@@ -18,6 +18,8 @@ draw_minessota_split(nv, m_i, lag_index, sigma_ols, lambda_1, lambda_2)
 \item{lambda_1}{shrinkage parameter for i = j}
 
 \item{lambda_2}{shrinkage parameter for i != j}
+
+\item{rng}{}
 }
 \value{
 List of probabilities according to the Minessota criteria.

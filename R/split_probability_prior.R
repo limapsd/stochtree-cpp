@@ -223,31 +223,30 @@ log_dirichilet_sampler <- function(alpha){
 #' @param sigma_ols calibrated weight for the cross-lags
 #' @param lambda_1 shrinkage parameter for i = j
 #' @param lambda_2 shrinkage parameter for i != j
-#'
+#' @param rng 
 #' @return List of probabilities according to the Minessota criteria.
 #' @export
 #'
 #' @examples
-draw_minessota_split <- function(nv, m_i, lag_index, sigma_ols, lambda_1, lambda_2){
+draw_minessota_split <- function(nv, m_i, lag_index, sigma_ols, lambda_1, lambda_2, rng){
   
     n = length(nv)
     phi_ = rep(0, n)
     for(i in 1:n){
         if(any(i == lag_index[m_i,])){
             l = which(lag_index[m_i,] == i)
-            # phi_[i] = lambda_1/(l^2) + nv[i]
             phi_[i] = lambda_1/(l^2) + nv[i]
         }else{
             var_search = which(lag_index == i ,arr.ind=TRUE)
             l  = var_search[2]
             m_j =  lag_index[var_search[1],1]
             phi_[i] = (lambda_2 * sigma_ols[m_i])/(l^2 * sigma_ols[m_j]) + nv[i]
-            # phi_[i] = (lambda_2 * sigma_ols[m_i])/(n*l^2 * sigma_ols[m_j]) + nv[i]
+            
         }
     }
-    
-    lpv = log_dirichilet_sampler(phi_)
-    return(lpv)
+    # lpv = log_dirichilet_sampler(phi_)
+     minn_dart = sample_minnesota_one_iteration(phi_,rng)
+    return(minn_dart$lpv)
 
 }
 

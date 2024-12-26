@@ -13,7 +13,7 @@
 #include <vector>
 
 [[cpp11::register]]
-void sample_gfr_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestDataset> data, 
+cpp11::writable::integers sample_gfr_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestDataset> data, 
                                   cpp11::external_pointer<StochTree::ColumnVector> residual, 
                                   cpp11::external_pointer<StochTree::ForestContainer> forest_samples, 
                                   cpp11::external_pointer<StochTree::ForestTracker> tracker, 
@@ -21,7 +21,8 @@ void sample_gfr_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestDatas
                                   cpp11::external_pointer<std::mt19937> rng, 
                                   cpp11::integers feature_types, int cutpoint_grid_size, 
                                   cpp11::doubles_matrix<> leaf_model_scale_input, 
-                                  cpp11::doubles variable_weights, 
+                                  cpp11::doubles variable_weights,
+                                  cpp11::writable::integers variable_count_splits, 
                                   double global_variance, int leaf_model_int, 
                                   bool pre_initialized = false
 ) {
@@ -56,24 +57,34 @@ void sample_gfr_one_iteration_cpp(cpp11::external_pointer<StochTree::ForestDatas
     
     // Convert variable weights to std::vector
     std::vector<double> var_weights_vector(variable_weights.size());
+    std::vector<int32_t> variable_count_splits_cpp(variable_count_splits.size());
+    
     for (int i = 0; i < variable_weights.size(); i++) {
         var_weights_vector[i] = variable_weights[i];
+        variable_count_splits_cpp[i] =  variable_count_splits[i];
     }
     
     // Run one iteration of the sampler
     if (leaf_model_enum == ForestLeafModel::kConstant) {
         StochTree::GaussianConstantLeafModel leaf_model = StochTree::GaussianConstantLeafModel(leaf_scale);
         StochTree::GFRForestSampler<StochTree::GaussianConstantLeafModel> sampler = StochTree::GFRForestSampler<StochTree::GaussianConstantLeafModel>(cutpoint_grid_size);
-        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, global_variance, feature_types_, pre_initialized);
+        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, variable_count_splits_cpp, global_variance, feature_types_, pre_initialized);
     } else if (leaf_model_enum == ForestLeafModel::kUnivariateRegression) {
         StochTree::GaussianUnivariateRegressionLeafModel leaf_model = StochTree::GaussianUnivariateRegressionLeafModel(leaf_scale);
         StochTree::GFRForestSampler<StochTree::GaussianUnivariateRegressionLeafModel> sampler = StochTree::GFRForestSampler<StochTree::GaussianUnivariateRegressionLeafModel>(cutpoint_grid_size);
-        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, global_variance, feature_types_, pre_initialized);
+        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, variable_count_splits_cpp, global_variance, feature_types_, pre_initialized);
     } else if (leaf_model_enum == ForestLeafModel::kMultivariateRegression) {
         StochTree::GaussianMultivariateRegressionLeafModel leaf_model = StochTree::GaussianMultivariateRegressionLeafModel(leaf_scale_matrix);
         StochTree::GFRForestSampler<StochTree::GaussianMultivariateRegressionLeafModel> sampler = StochTree::GFRForestSampler<StochTree::GaussianMultivariateRegressionLeafModel>(cutpoint_grid_size);
-        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, global_variance, feature_types_, pre_initialized);
+        sampler.SampleOneIter(*tracker, *forest_samples, leaf_model, *data, *residual, *split_prior, *rng, var_weights_vector, variable_count_splits_cpp, global_variance, feature_types_, pre_initialized);
     }
+    
+    for(int i =0; i<variable_count_splits.size();i++){
+      variable_count_splits.at(i) = variable_count_splits_cpp.at(i);
+    //   int test = variable_count_splits.at(i);
+    }
+    
+    return variable_count_splits;
 }
 
 [[cpp11::register]]
@@ -242,6 +253,25 @@ cpp11::writable::list sample_alpha_one_iteration_cpp(cpp11::doubles log_prob_vec
     return return_list;
 }
 
+[[cpp11::register]]
+cpp11::writable::list sample_minnesota_dart_one_iteration_cpp(cpp11::doubles phi, cpp11::external_pointer<std::mt19937> rng){
+    std::vector<double> _phi(phi.begin(), phi.end());
+    StochTree::DirichletSampler dirchlet_sampler =  StochTree::DirichletSampler();
+    std::tuple<double, std::vector<double>> results = dirchlet_sampler.Sample(_phi, *rng);
+    
+    double lse = std::get<0>(results);
+    std::vector<double> draw = std::get<1>(results);
+    
+    cpp11::writable::doubles r_draw(draw.begin(), draw.end());
+    cpp11::writable::list return_list;
+
+    return_list.push_back(cpp11::as_sexp(lse));    
+    return_list.push_back(cpp11::as_sexp(r_draw));
+
+    return return_list;
+}
+
+
 
 [[cpp11::register]]
 cpp11::external_pointer<std::mt19937> rng_cpp(int random_seed = -1) {
@@ -279,4 +309,16 @@ cpp11::external_pointer<StochTree::ForestTracker> forest_tracker_cpp(cpp11::exte
     
     // Release management of the pointer to R session
     return cpp11::external_pointer<StochTree::ForestTracker>(tracker_ptr_.release());
+}
+
+[[cpp11::register]]
+void update_alpha_tree_prior_cpp(cpp11::external_pointer<StochTree::TreePrior> tree_prior_ptr, double alpha) {
+    // Update alpha
+    tree_prior_ptr->SetAlpha(alpha);
+}
+
+[[cpp11::register]]
+void update_beta_tree_prior_cpp(cpp11::external_pointer<StochTree::TreePrior> tree_prior_ptr, double beta) {
+    // Update beta
+    tree_prior_ptr->SetBeta(beta);
 }

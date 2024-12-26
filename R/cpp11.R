@@ -268,8 +268,8 @@ forest_kernel_compute_kernel_train_test_cpp <- function(forest_kernel, covariate
   .Call(`_stochtree_forest_kernel_compute_kernel_train_test_cpp`, forest_kernel, covariates_train, covariates_test, forest_container, forest_num)
 }
 
-sample_gfr_one_iteration_cpp <- function(data, residual, forest_samples, tracker, split_prior, rng, feature_types, cutpoint_grid_size, leaf_model_scale_input, variable_weights, global_variance, leaf_model_int, pre_initialized) {
-  invisible(.Call(`_stochtree_sample_gfr_one_iteration_cpp`, data, residual, forest_samples, tracker, split_prior, rng, feature_types, cutpoint_grid_size, leaf_model_scale_input, variable_weights, global_variance, leaf_model_int, pre_initialized))
+sample_gfr_one_iteration_cpp <- function(data, residual, forest_samples, tracker, split_prior, rng, feature_types, cutpoint_grid_size, leaf_model_scale_input, variable_weights, variable_count_splits, global_variance, leaf_model_int, pre_initialized) {
+  .Call(`_stochtree_sample_gfr_one_iteration_cpp`, data, residual, forest_samples, tracker, split_prior, rng, feature_types, cutpoint_grid_size, leaf_model_scale_input, variable_weights, variable_count_splits, global_variance, leaf_model_int, pre_initialized)
 }
 
 sample_mcmc_one_iteration_cpp <- function(data, residual, forest_samples, tracker, split_prior, rng, feature_types, cutpoint_grid_size, leaf_model_scale_input, variable_weights, variable_count_splits, global_variance, leaf_model_int, pre_initialized) {
@@ -292,6 +292,10 @@ sample_alpha_one_iteration_cpp <- function(log_prob_vector, a, b, rho, rng) {
   .Call(`_stochtree_sample_alpha_one_iteration_cpp`, log_prob_vector, a, b, rho, rng)
 }
 
+sample_minnesota_dart_one_iteration_cpp <- function(phi, rng) {
+  .Call(`_stochtree_sample_minnesota_dart_one_iteration_cpp`, phi, rng)
+}
+
 rng_cpp <- function(random_seed) {
   .Call(`_stochtree_rng_cpp`, random_seed)
 }
@@ -302,6 +306,14 @@ tree_prior_cpp <- function(alpha, beta, min_samples_leaf) {
 
 forest_tracker_cpp <- function(data, feature_types, num_trees, n) {
   .Call(`_stochtree_forest_tracker_cpp`, data, feature_types, num_trees, n)
+}
+
+update_alpha_tree_prior_cpp <- function(tree_prior_ptr, alpha) {
+  invisible(.Call(`_stochtree_update_alpha_tree_prior_cpp`, tree_prior_ptr, alpha))
+}
+
+update_beta_tree_prior_cpp <- function(tree_prior_ptr, beta) {
+  invisible(.Call(`_stochtree_update_beta_tree_prior_cpp`, tree_prior_ptr, beta))
 }
 
 init_json_cpp <- function() {

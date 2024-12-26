@@ -499,8 +499,9 @@ class GFRForestSampler {
   ~GFRForestSampler() {}
 
   void SampleOneIter(ForestTracker& tracker, ForestContainer& forests, LeafModel& leaf_model, ForestDataset& dataset, 
-                     ColumnVector& residual, TreePrior& tree_prior, std::mt19937& gen, std::vector<double> variable_weights, 
-                     double global_variance, std::vector<FeatureType>& feature_types, bool pre_initialized = false) {
+                     ColumnVector& residual, TreePrior& tree_prior, std::mt19937& gen, std::vector<double> variable_weights,
+                     std::vector<int32_t>& variable_count_splits, double global_variance, std::vector<FeatureType>& feature_types,
+                     bool pre_initialized = false) {
     // Previous number of samples
     int prev_num_samples = forests.NumSamples();
     
@@ -539,7 +540,7 @@ class GFRForestSampler {
       tree = ensemble->GetTree(i);
       
       // Sample tree i
-      SampleTreeOneIter(tree, tracker, forests, leaf_model, dataset, residual, tree_prior, gen, i, global_variance, feature_types);
+      SampleTreeOneIter(tree, tracker, forests, leaf_model, dataset, residual, tree_prior, gen, i, variable_count_splits, global_variance, feature_types);
       
       // Sample leaf parameters for tree i
       tree = ensemble->GetTree(i);
@@ -559,8 +560,8 @@ class GFRForestSampler {
   std::minus<double> minus_op_;
   
   void SampleTreeOneIter(Tree* tree, ForestTracker& tracker, ForestContainer& forests, LeafModel& leaf_model, ForestDataset& dataset,
-                         ColumnVector& residual, TreePrior& tree_prior, std::mt19937& gen, int tree_num, double global_variance, 
-                         std::vector<FeatureType>& feature_types) {
+                         ColumnVector& residual, TreePrior& tree_prior, std::mt19937& gen, int tree_num, std::vector<int32_t>& variable_count_splits, 
+                         double global_variance, std::vector<FeatureType>& feature_types) {
     int root_id = Tree::kRoot;
     int curr_node_id;
     data_size_t curr_node_begin;
@@ -583,13 +584,13 @@ class GFRForestSampler {
       curr_node_begin = begin_end.first;
       curr_node_end = begin_end.second;
       // Draw a split rule at random
-      SampleSplitRule(tree, tracker, leaf_model, dataset, residual, tree_prior, gen, tree_num, global_variance, cutpoint_grid_size_, 
+      SampleSplitRule(tree, tracker, leaf_model, dataset, residual, tree_prior, gen, tree_num, variable_count_splits, global_variance,cutpoint_grid_size_, 
                       node_index_map, split_queue, curr_node_id, curr_node_begin, curr_node_end, feature_types);
     }
   }
 
   void SampleSplitRule(Tree* tree, ForestTracker& tracker, LeafModel& leaf_model, ForestDataset& dataset, ColumnVector& residual, 
-                       TreePrior& tree_prior, std::mt19937& gen, int tree_num, double global_variance, int cutpoint_grid_size, 
+                       TreePrior& tree_prior, std::mt19937& gen, int tree_num, std::vector<int32_t>& variable_count_splits, double global_variance, int cutpoint_grid_size, 
                        std::unordered_map<int, std::pair<data_size_t, data_size_t>>& node_index_map, std::deque<node_t>& split_queue, 
                        int node_id, data_size_t node_begin, data_size_t node_end, std::vector<FeatureType>& feature_types) {
     std::vector<double> log_cutpoint_evaluations;
@@ -618,10 +619,12 @@ class GFRForestSampler {
       // "No split" sampled, don't split or add any nodes to split queue
       return;
     } else {
+      
       // Split sampled
       int feature_split = cutpoint_features[split_chosen];
       FeatureType feature_type = cutpoint_feature_types[split_chosen];
       double split_value = cutpoint_values[split_chosen];
+      variable_count_splits.at(feature_split)++;
       // Perform all of the relevant "split" operations in the model, tree and training dataset
       
       // Compute node sample size

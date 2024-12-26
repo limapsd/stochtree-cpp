@@ -179,3 +179,5 @@ createForestContainer <- function(num_trees, output_dimension=1, is_leaf_constan
         ForestSamples$new(num_trees, output_dimension, is_leaf_constant)
     )))
 }
+
+
