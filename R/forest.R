@@ -729,7 +729,7 @@ Forest <- R6::R6Class(
         #' Retrieve a vector of split counts for every training set variable in the forest
         #' @param num_features Total number of features in the training set
         get_forest_split_counts = function(num_features) {
-            return(get_forest_split_counts_active_forest_cpp(self$forest_ptr, num_features))
+            return(get_overall_split_counts_active_forest_cpp(self$forest_ptr, num_features))
         }, 
         
         #' @description
@@ -809,4 +809,39 @@ resetForestModel <- function(forest_model, forest, dataset, residual, is_mean_mo
 #' @export
 rootResetActiveForest <- function(active_forest) {
     root_reset_active_forest_cpp(active_forest$forest_ptr)
+}
+
+#' VariableCount R object
+#'
+#' @description
+#' R object wrapping an external pointer to a C++ class
+VariableCount <- R6::R6Class(
+  classname = "VariableCount",
+  cloneable = FALSE,
+  public = list(
+    
+    #' @field variable_count_ptr External pointer to a C++ std::mt19937 class
+    variable_count_ptr = NULL,
+    
+    #' @description
+    #' Create a new CppRNG object.
+    #' @param vec_size (Optional) random seed for sampling
+    #' @return A new `VariableCount` object.
+    initialize = function(vec_size) {
+      self$rng_ptr <- variable_count_cpp(vec_size)
+    },
+    get_variable_count
+  )
+)
+
+#' Create an `VariableCount` object
+#'
+#' @param vec_size Size of the C++ vector of `ObjectData` elements
+#'
+#' @return `VariableCount` object
+#' @export
+createVariableCount <- function(vec_size){
+  return(invisible((
+    VariableCount$new(vec_size)
+  )))
 }
