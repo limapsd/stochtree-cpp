@@ -1,7 +1,5 @@
 ######### This is the core implementation of a BART algo ###############
 
-library(stochtree)
-
 # Generate the data
 n <- 500
 p_X <- 10
@@ -71,19 +69,19 @@ for (i in 1:num_samples) {
     if (keep_burnin) keep_sample <- T
     else keep_sample <- F
   }
-
+  
   # Sample forest
   forest_model$sample_one_iteration(
     forest_dataset, outcome, forest_samples, active_forest, rng, feature_types,
     outcome_model_type, leaf_prior_scale, var_weights,
     1, 1, global_var_samples[i], cutpoint_grid_size, keep_forest = keep_sample, gfr = F
   )
-
+  
   # Sample global variance parameter
   global_var_samples[i+1] <- sample_sigma2_one_iteration(
     outcome, forest_dataset, rng, nu, lambda
   )
-
+  
   # Sample leaf node variance parameter and update `leaf_prior_scale`
   leaf_scale_samples[i+1] <- sample_tau_one_iteration(
     active_forest, rng, a_leaf, b_leaf

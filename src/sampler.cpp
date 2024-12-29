@@ -1,6 +1,8 @@
 #include <cpp11.hpp>
 #include "stochtree_types.h"
 #include <stochtree/container.h>
+#include <stochtree/alpha_sampler.h>
+#include <stochtree/dirichlet_sampler.h>
 #include <stochtree/leaf_model.h>
 #include <stochtree/meta.h>
 #include <stochtree/partition_tracker.h>
@@ -173,6 +175,71 @@ double sample_tau_one_iteration_cpp(cpp11::external_pointer<StochTree::TreeEnsem
     StochTree::LeafNodeHomoskedasticVarianceModel var_model = StochTree::LeafNodeHomoskedasticVarianceModel();
     return var_model.SampleVarianceParameter(active_forest.get(), a, b, *rng);
 }
+
+[[cpp11::register]]
+cpp11::writable::list sample_dart_splits_one_iteration_cpp(cpp11::integers variable_count_splits, double alpha, cpp11::external_pointer<std::mt19937> rng){
+    
+    StochTree::DirichletSampler dirchlet_sampler =  StochTree::DirichletSampler();
+    size_t n = variable_count_splits.size();
+    std::vector<double> _alpha(n);
+    
+    for(size_t j =0; j<n;j++)_alpha[j] = alpha/(double)n + variable_count_splits[j];
+    
+    std::tuple<double, std::vector<double>> results = dirchlet_sampler.Sample(_alpha, *rng);
+    double lse = std::get<0>(results);
+    std::vector<double> draw = std::get<1>(results);
+    
+    cpp11::writable::doubles r_draw(draw.begin(), draw.end());
+    cpp11::writable::list return_list;
+
+    return_list.push_back(cpp11::as_sexp(lse));    
+    return_list.push_back(cpp11::as_sexp(r_draw));
+
+    return return_list;
+}
+
+
+
+[[cpp11::register]]
+cpp11::writable::list sample_alpha_one_iteration_cpp(cpp11::doubles log_prob_vector, double a , double b, double rho, cpp11::external_pointer<std::mt19937> rng){
+    StochTree::AlphaSampler alpha_sampler = StochTree::AlphaSampler();
+    std::vector<double> log_prob_stdvec(log_prob_vector.begin(), log_prob_vector.end());
+    
+    std::tuple<std::vector<double>, double, double> results = alpha_sampler.Sample(log_prob_stdvec, a, b, rho, *rng);
+
+    std::vector<double> log_likes = std::get<0>(results);
+    double _alpha = std::get<1>(results);
+    double log_sum_exp = std::get<2>(results);
+    
+    cpp11::writable::doubles r_loglikes(log_likes.begin(), log_likes.end());
+    cpp11::writable::list return_list;
+    
+    return_list.push_back(cpp11::as_sexp(r_loglikes));
+    return_list.push_back(cpp11::as_sexp(_alpha));
+    return_list.push_back(cpp11::as_sexp(log_sum_exp));
+
+    return return_list;
+}
+
+[[cpp11::register]]
+cpp11::writable::list sample_minnesota_dart_one_iteration_cpp(cpp11::doubles phi, cpp11::external_pointer<std::mt19937> rng){
+    std::vector<double> _phi(phi.begin(), phi.end());
+    StochTree::DirichletSampler dirchlet_sampler =  StochTree::DirichletSampler();
+    std::tuple<double, std::vector<double>> results = dirchlet_sampler.Sample(_phi, *rng);
+    
+    double lse = std::get<0>(results);
+    std::vector<double> draw = std::get<1>(results);
+    
+    cpp11::writable::doubles r_draw(draw.begin(), draw.end());
+    cpp11::writable::list return_list;
+
+    return_list.push_back(cpp11::as_sexp(lse));    
+    return_list.push_back(cpp11::as_sexp(r_draw));
+
+    return return_list;
+}
+
+
 
 [[cpp11::register]]
 cpp11::external_pointer<std::mt19937> rng_cpp(int random_seed = -1) {

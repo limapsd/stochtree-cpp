@@ -572,6 +572,18 @@ sample_tau_one_iteration_cpp <- function(active_forest, rng, a, b) {
   .Call(`_stochtree_sample_tau_one_iteration_cpp`, active_forest, rng, a, b)
 }
 
+sample_dart_splits_one_iteration_cpp <- function(variable_count_splits, alpha, rng) {
+  .Call(`_stochtree_sample_dart_splits_one_iteration_cpp`, variable_count_splits, alpha, rng)
+}
+
+sample_alpha_one_iteration_cpp <- function(log_prob_vector, a, b, rho, rng) {
+  .Call(`_stochtree_sample_alpha_one_iteration_cpp`, log_prob_vector, a, b, rho, rng)
+}
+
+sample_minnesota_dart_one_iteration_cpp <- function(phi, rng) {
+  .Call(`_stochtree_sample_minnesota_dart_one_iteration_cpp`, phi, rng)
+}
+
 rng_cpp <- function(random_seed) {
   .Call(`_stochtree_rng_cpp`, random_seed)
 }

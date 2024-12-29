@@ -721,8 +721,9 @@ cpp11::writable::integers get_tree_split_counts_active_forest_cpp(cpp11::externa
     StochTree::Tree* tree = active_forest->GetTree(tree_num);
     std::vector<int32_t> split_nodes = tree->GetInternalNodes();
     for (int i = 0; i < split_nodes.size(); i++) {
-        auto split_feature = split_nodes.at(i);
-        output.at(split_feature)++;
+        auto node_id = split_nodes.at(i);
+        auto feature_split = tree->SplitIndex(node_id);
+        output.at(feature_split)++;
     }
     return output;
 }
@@ -736,8 +737,9 @@ cpp11::writable::integers get_overall_split_counts_active_forest_cpp(cpp11::exte
         StochTree::Tree* tree = active_forest->GetTree(i);
         std::vector<int32_t> split_nodes = tree->GetInternalNodes();
         for (int j = 0; j < split_nodes.size(); j++) {
-            auto split_feature = split_nodes.at(j);
-            output.at(split_feature)++;
+            auto node_id = split_nodes.at(j);
+            auto feature_split = tree->SplitIndex(node_id);
+            output.at(feature_split)++;
         }
     }
     return output;

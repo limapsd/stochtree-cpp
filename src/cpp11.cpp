@@ -1058,6 +1058,27 @@ extern "C" SEXP _stochtree_sample_tau_one_iteration_cpp(SEXP active_forest, SEXP
   END_CPP11
 }
 // sampler.cpp
+cpp11::writable::list sample_dart_splits_one_iteration_cpp(cpp11::integers variable_count_splits, double alpha, cpp11::external_pointer<std::mt19937> rng);
+extern "C" SEXP _stochtree_sample_dart_splits_one_iteration_cpp(SEXP variable_count_splits, SEXP alpha, SEXP rng) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(sample_dart_splits_one_iteration_cpp(cpp11::as_cpp<cpp11::decay_t<cpp11::integers>>(variable_count_splits), cpp11::as_cpp<cpp11::decay_t<double>>(alpha), cpp11::as_cpp<cpp11::decay_t<cpp11::external_pointer<std::mt19937>>>(rng)));
+  END_CPP11
+}
+// sampler.cpp
+cpp11::writable::list sample_alpha_one_iteration_cpp(cpp11::doubles log_prob_vector, double a, double b, double rho, cpp11::external_pointer<std::mt19937> rng);
+extern "C" SEXP _stochtree_sample_alpha_one_iteration_cpp(SEXP log_prob_vector, SEXP a, SEXP b, SEXP rho, SEXP rng) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(sample_alpha_one_iteration_cpp(cpp11::as_cpp<cpp11::decay_t<cpp11::doubles>>(log_prob_vector), cpp11::as_cpp<cpp11::decay_t<double>>(a), cpp11::as_cpp<cpp11::decay_t<double>>(b), cpp11::as_cpp<cpp11::decay_t<double>>(rho), cpp11::as_cpp<cpp11::decay_t<cpp11::external_pointer<std::mt19937>>>(rng)));
+  END_CPP11
+}
+// sampler.cpp
+cpp11::writable::list sample_minnesota_dart_one_iteration_cpp(cpp11::doubles phi, cpp11::external_pointer<std::mt19937> rng);
+extern "C" SEXP _stochtree_sample_minnesota_dart_one_iteration_cpp(SEXP phi, SEXP rng) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(sample_minnesota_dart_one_iteration_cpp(cpp11::as_cpp<cpp11::decay_t<cpp11::doubles>>(phi), cpp11::as_cpp<cpp11::decay_t<cpp11::external_pointer<std::mt19937>>>(rng)));
+  END_CPP11
+}
+// sampler.cpp
 cpp11::external_pointer<std::mt19937> rng_cpp(int random_seed);
 extern "C" SEXP _stochtree_rng_cpp(SEXP random_seed) {
   BEGIN_CPP11
@@ -1483,8 +1504,11 @@ static const R_CallMethodDef CallEntries[] = {
     {"_stochtree_rng_cpp",                                             (DL_FUNC) &_stochtree_rng_cpp,                                              1},
     {"_stochtree_root_reset_active_forest_cpp",                        (DL_FUNC) &_stochtree_root_reset_active_forest_cpp,                         1},
     {"_stochtree_root_reset_rfx_tracker_cpp",                          (DL_FUNC) &_stochtree_root_reset_rfx_tracker_cpp,                           4},
+    {"_stochtree_sample_alpha_one_iteration_cpp",                      (DL_FUNC) &_stochtree_sample_alpha_one_iteration_cpp,                       5},
+    {"_stochtree_sample_dart_splits_one_iteration_cpp",                (DL_FUNC) &_stochtree_sample_dart_splits_one_iteration_cpp,                 3},
     {"_stochtree_sample_gfr_one_iteration_cpp",                        (DL_FUNC) &_stochtree_sample_gfr_one_iteration_cpp,                        17},
     {"_stochtree_sample_mcmc_one_iteration_cpp",                       (DL_FUNC) &_stochtree_sample_mcmc_one_iteration_cpp,                       17},
+    {"_stochtree_sample_minnesota_dart_one_iteration_cpp",             (DL_FUNC) &_stochtree_sample_minnesota_dart_one_iteration_cpp,              2},
     {"_stochtree_sample_sigma2_one_iteration_cpp",                     (DL_FUNC) &_stochtree_sample_sigma2_one_iteration_cpp,                      5},
     {"_stochtree_sample_tau_one_iteration_cpp",                        (DL_FUNC) &_stochtree_sample_tau_one_iteration_cpp,                         4},
     {"_stochtree_set_leaf_value_active_forest_cpp",                    (DL_FUNC) &_stochtree_set_leaf_value_active_forest_cpp,                     2},
