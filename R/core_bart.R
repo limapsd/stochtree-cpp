@@ -170,7 +170,7 @@ core_bart <-function(y_train, X_train,
       outcome_model_type, current_leaf_scale, variable_weights_mean, a_forest, b_forest, current_sigma2,
       cutpoint_grid_size, keep_forest = keep_sample, gfr = FALSE)
     
-    variable_count_splits <- active_forest_mean$get_forest_split_counts(ncol(X))
+    variable_count_splits <- active_forest_mean$get_forest_split_counts(ncol(X_train))
     var_count_matrix[i,]  <- variable_count_splits
     
     # Sample global variance parameter
