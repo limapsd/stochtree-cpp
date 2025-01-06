@@ -1,7 +1,7 @@
 
 #' Run the Multivariate BART Algorithm for Supervised Learning.
 #'
-#' @param y_raw Outcome to be modeled by the ensemble. This is a TxM matriz.
+#' @param data Outcome to be modeled by the ensemble. This is a TxM matriz.
 #' @param lags Number of Lags used in the VAR(p) system.
 #' @param bart_prior Which Prior we are going to use in the BART: CGM, DART or Minn.
 #' @param sv Stochastic Volatility Flag.
@@ -37,53 +37,71 @@ fsv_mbart <- function(data,
   }else{
     save_set    <- seq(from = num_thin + num_burnin, to = num_samples, by = num_thin)
   }
-   
 
-  Ymu   <- apply(data,  2, mean,na.rm=T)
-  Ysd   <- apply(data,  2, sd,na.rm=T)
-  Yraw  <- apply(data, 2, function(x){(x-mean(x,na.rm=T))/sd(x,na.rm=T)})
-  p     <- lags
+  p    <- lags
+  M    <- ncol(data) 
+  K    <- M*p
   
-  X_train <- cbind(mlag(Yraw,p))[(p+1):nrow(Yraw),]
-  Y_train <- Yraw[(p+1):nrow(Yraw),] 
+  Traw <- nrow(data)
+  Y_tmp <- as.matrix(data)
 
-  M  <- ncol(Y_train)
-  TT <- nrow(Y_train)
-  K  <- ncol(X_train)
+  Ymu   <- apply(Y_tmp,  2, mean,na.rm=T)
+  Ysd   <- apply(Y_tmp,  2, sd,na.rm=T)
+  Y_tmp  <- apply(Y_tmp,  2, function(x){(x-mean(x,na.rm=T))/sd(x,na.rm=T)})
 
+  # Data checks
+  if (any(is.na(Y_tmp))){
+    stop("\nNAs in data.\n")
+  }
+  if (ncol(Y_tmp) < 2) {
+    stop("The matrix 'data' should contain at least two variables. \n")
+  }
+  
+  if (is.null(colnames(Y_tmp))) {
+    colnames(Y_tmp) <- paste("y", 1:ncol(Y_tmp), sep = "")
+    warning(paste("No column names supplied in data, using:",
+                  paste(colnames(Y_tmp), collapse = ", "), ", instead.\n"))
+  }
+
+  # embed: get lagged values
+  X_train <- embed(Y_tmp, dimension = p + 1)[, -(1:M)]
+  colnames(X_train) <- paste0(colnames(Y_tmp), ".l", sort(rep(1:p,M)))
+  Y_train <- Y_tmp[-c(1:p), ]
+
+  TT <- Traw - p
+
+ if(TT!=nrow(Y_train) | TT!=nrow(X_train)){
+   stop("Something went wrong: Tobs != nrow(Y). \n")
+ }
 
   variable_names <- colnames(Y_train)
-  index_names    <- rownames(Y_train)
   feature_types  <- as.integer(rep(0, K))
   
-  colnames(X_train) <- paste0(rep(variable_names, p),
-                             sort(rep(paste(".t-", sprintf("%02d", 1:p), sep = ""), each = M), decreasing = F), sep = "" )
-  
- bart_params <- preprocessmBartParams(params)
+  bart_params <- preprocessmBartParams(params)
 
- alpha <- bart_params$alpha
- beta  <- bart_params$beta
- 
- min_samples_leaf     <- bart_params$min_samples_leaf
- max_depth            <- bart_params$max_depth
- num_trees            <- bart_params$n_trees
- cutpoint_grid_size   <- bart_params$cutpoint_grid_size
- nu_bart              <- bart_params$nu
- lambda_bart          <- bart_params$lambda
- 
- a_leaf               <- bart_params$a_leaf
- b_leaf               <- bart_params$b_leaf
- a_forest             <- bart_params$a_forest
- b_forest             <- bart_params$b_forest
- random_seed          <- bart_params$random_seed
- sample_sigma_leaf    <- bart_params$sample_sigma_leaf
- 
- alpha_dart           <- bart_params$alpha_dart
- rho_dart             <- bart_params$rho_dart
- a_dart               <- bart_params$a_dart
- b_dart               <- bart_params$b_dart
- 
- outcome_model_type <- 0 # numeric
+  alpha <- bart_params$alpha
+  beta  <- bart_params$beta
+  
+  min_samples_leaf     <- bart_params$min_samples_leaf
+  max_depth            <- bart_params$max_depth
+  num_trees            <- bart_params$n_trees
+  cutpoint_grid_size   <- bart_params$cutpoint_grid_size
+  nu_bart              <- bart_params$nu
+  lambda_bart          <- bart_params$lambda
+  
+  a_leaf               <- bart_params$a_leaf
+  b_leaf               <- bart_params$b_leaf
+  a_forest             <- bart_params$a_forest
+  b_forest             <- bart_params$b_forest
+  random_seed          <- bart_params$random_seed
+  sample_sigma_leaf    <- bart_params$sample_sigma_leaf
+  
+  alpha_dart           <- bart_params$alpha_dart
+  rho_dart             <- bart_params$rho_dart
+  a_dart               <- bart_params$a_dart
+  b_dart               <- bart_params$b_dart
+  
+  outcome_model_type <- 0 # numeric
   
 ###--------------------------------------------------------------------------###
 ###-------------------------- MLE estimates ---------------------------------###
