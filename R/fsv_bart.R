@@ -1,13 +1,30 @@
 
-fsv_mbart <- function(y_raw, 
-                      lags = 1,
-                      fhorz = 1,
+#' Run the Multivariate BART Algorithm for Supervised Learning.
+#'
+#' @param y_raw Outcome to be modeled by the ensemble. This is a TxM matriz.
+#' @param lags Number of Lags used in the VAR(p) system.
+#' @param bart_prior Which Prior we are going to use in the BART: CGM, DART or Minn.
+#' @param sv Stochastic Volatility Flag.
+#' @param num_burnin Number of "burn-in" iterations of the MCMC sampler. Default: 100.
+#' @param num_mcmc Number of "retained" iterations of the MCMC sampler. Default: 100.
+#' @param params 
+#' @param num_thin 
+#' @param keep_burnin Whether or not "burn-in" samples should be stored. Default FALSE. 
+#'
+#' @return List of sampling outputs and a wrapper around the sampled forests (which can be used for in-memory prediction on new data).
+#' @export
+#'
+#' @examples
+fsv_mbart <- function(data, 
+                      lags = 1L,
                       bart_prior = "CGM",
                       sv = "none",
-                      keep_samples = FALSE,
-                      num_burnin   =  100,
-                      num_mcmc     = 100,
+                      num_burnin   =  100L,
+                      num_mcmc     = 100L,
+                      num_thin     = 1L,
+                      keep_burnin = FALSE,
                       params = ls()){
+  
 
 ###--------------------------------------------------------------------------###
 ###-------------------- Preprocessing the VAR objects  ----------------------###
@@ -15,13 +32,17 @@ fsv_mbart <- function(y_raw,
 
   num_samples <- num_burnin + num_mcmc
   num_saved   <- num_mcmc %/% num_thin
-  save_set    <- seq(from = num_thin + num_burnin, to = num_samples, by = num_thin)
-  save_ind    <- seq(from = 1, to = num_thin)  
+  if(keep_burnin){
+    save_set    <- seq(from = num_thin, to = num_samples, by = num_thin)
+  }else{
+    save_set    <- seq(from = num_thin + num_burnin, to = num_samples, by = num_thin)
+  }
+   
 
-  Ymu <- apply(y_raw, 2, mean,na.rm=T)
-  Ysd <- apply(y_raw, 2, sd,na.rm=T)
-  Yraw <- apply(Yraw, 2, function(x){(x-mean(x,na.rm=T))/sd(x,na.rm=T)})
-  p    <- lags
+  Ymu   <- apply(data,  2, mean,na.rm=T)
+  Ysd   <- apply(data,  2, sd,na.rm=T)
+  Yraw  <- apply(data, 2, function(x){(x-mean(x,na.rm=T))/sd(x,na.rm=T)})
+  p     <- lags
   
   X_train <- cbind(mlag(Yraw,p))[(p+1):nrow(Yraw),]
   Y_train <- Yraw[(p+1):nrow(Yraw),] 
@@ -38,7 +59,7 @@ fsv_mbart <- function(y_raw,
   colnames(X_train) <- paste0(rep(variable_names, p),
                              sort(rep(paste(".t-", sprintf("%02d", 1:p), sep = ""), each = M), decreasing = F), sep = "" )
   
- bart_params <- preprocessBartParams(params)
+ bart_params <- preprocessmBartParams(params)
 
  alpha <- bart_params$alpha
  beta  <- bart_params$beta
@@ -61,6 +82,8 @@ fsv_mbart <- function(y_raw,
  rho_dart             <- bart_params$rho_dart
  a_dart               <- bart_params$a_dart
  b_dart               <- bart_params$b_dart
+ 
+ outcome_model_type <- 0 # numeric
   
 ###--------------------------------------------------------------------------###
 ###-------------------------- MLE estimates ---------------------------------###
@@ -82,13 +105,13 @@ fsv_mbart <- function(y_raw,
  ## Stochtree priors and Initializers:
   quantile_cutoff <- 0.9
   
-  if (is.null(lambda)) {
+  if (is.null(lambda_bart)) {
     lambda <- (sigma2hat*qgamma(1-quantile_cutoff,nu_bart))/nu_bart
   }
   
-  if (is.null(sigma2_init)) sigma2_init <- sigma2hat
+  sigma2_init <- sigma2hat
   if (is.null(b_leaf)) b_leaf <- var(Y_train)/(2*num_trees)
-  if (is.null(sigma_leaf_init)) sigma_leaf_init <- var(Y_train)/(num_trees)
+  sigma_leaf_init <- var(Y_train)/(num_trees)
   
   current_leaf_scale <- as.matrix(sigma_leaf_init)
   current_sigma2 <- sigma2_init
@@ -99,8 +122,7 @@ fsv_mbart <- function(y_raw,
   rng <- createRNG(random_seed)
 
   #Variable Selection Splits
-  variable_weight_splits_ls  <- matrix(0, nrow = n, ncol = k) 
-  variable_count_splits_ls  <- matrix(0,  nrow = n, ncol = k) 
+  variable_weight_splits_ls  <- matrix(0, nrow = M, ncol = K) 
   var_count_matrix <- array(NA, dim =  c(num_saved, K, M) )
 
   
@@ -118,20 +140,19 @@ fsv_mbart <- function(y_raw,
   
 
   # Container of forest samples
-  forest_samples_ls <- c()
-  active_forests_ls <- c()
+  forest_dataset_train_ls <- c()
+  forest_container_ls <- c()
+  active_forest_ls <- c()
   bart_model_ls     <- c()
 
   for(mm in 1:M){    
     variable_weight_splits_ls[mm,] <- rep(1/K, K)
-    variable_count_splits_ls[mm,] <-  as.integer(rep(0,K))
-    
     forest_dataset_train_ls <- c(forest_dataset_train_ls, stochtree::createForestDataset(X_train, basis = NULL, variance_weights = NULL) )
-    forest_samples_ls <- c(forest_samples_ls, stochtree::createForestContainer(num_trees, is_leaf_constant =  TRUE))
+    forest_container_ls <- c(forest_container_ls, stochtree::createForestContainer(num_trees, is_leaf_constant =  TRUE))
     bart_model_ls <- c(bart_model_ls, stochtree::createForestModel(forest_dataset_train_ls[[mm]], 
                                                           feature_types, num_trees, nrow(X_train), alpha, beta,
-                                                          min_samples_leaf))
-    active_forest_ls <- c(active_forest_ls, <- stochtree::createForest(num_trees = num_trees, is_leaf_constant = TRUE))
+                                                          min_samples_leaf, max_depth))
+    active_forest_ls <- c(active_forest_ls, stochtree::createForest(num_trees = num_trees, is_leaf_constant = TRUE))
 
   }
 
@@ -242,6 +263,7 @@ if(sv == "SV"){
   
   Y_store <- array(NA, dim=c(num_saved, TT, M))
   H_store <- array(NA, dim=c(num_saved, TT, M))
+  Sigma_store <- array(NA, dim=c(num_saved, TT, M))
   Hfc_store <- array(NA, dim = c(num_saved, fhorz, M) )
   Loadings_store <-array(NA, dim = c(num_saved, M, Q))
   Y_forecast_store <- array(NA, dim = c(num_saved, fhorz, M) )
@@ -255,6 +277,21 @@ if(sv == "SV"){
   start = Sys.time()
   
   for (i in 1:num_samples) {
+    
+    is_mcmc <- i > num_burnin
+    
+    if (is_mcmc) {
+      mcmc_counter <- i - (num_burnin)
+      if (mcmc_counter %% num_thin == 0) keep_sample <- TRUE
+      else keep_sample <- FALSE
+    } else {
+      if (keep_burnin) keep_sample <- TRUE
+      else keep_sample <- FALSE
+    }
+    
+    
+    
+    
     for(mm in 1:M){  
         # Sampling model Coefficients:
         Y_ <- Y_train - tcrossprod(Ft, Lambda)
@@ -266,22 +303,20 @@ if(sv == "SV"){
 
         #Unpacking the objects for each equation:
         variable_weights      <- variable_weight_splits_ls[mm,]
-        variable_count_splits <- as.integer(variable_count_splits_ls[mm,])
-        
-        forest_samples_mean  <- forest_samples_ls[[mm]] 
-        forest_model_mean    <- bart_sampler_ls[[mm]]
+      
+        forest_samples_mean  <- forest_container_ls[[mm]] 
+        forest_model_mean    <- bart_model_ls[[mm]]
         active_forest_mean   <- active_forest_ls[[mm]]
         forest_dataset_train <- forest_dataset_train_ls[[mm]]
 
         forest_model_mean$sample_one_iteration(forest_dataset_train, outcome_train, forest_samples_mean,
-                          active_forest_mean, rng, feature_types, outcome_model_type, current_leaf_scale,
-                          variable_weights_mean, a_forest, b_forest, current_sigma2, cutpoint_grid_size,
+                          active_forest_mean, rng, feature_types, outcome_model_type, current_leaf_scale[mm,mm],
+                          variable_weights, a_forest, b_forest, current_sigma2[mm,mm], cutpoint_grid_size,
                           keep_forest = keep_sample, gfr = FALSE)
 
-        variable_count_splits <- active_forest_mean$get_forest_split_counts(ncol(X))                  
-        var_count_matrix[i,,mm]  <- variable_count_splits
+        variable_count_splits <- active_forest_mean$get_forest_split_counts(ncol(X_train))                  
         
-        leaf_scale_i <- stochtree::sample_tau_one_iteration(active_forest_mean, rng, a_leaf, b_leaf)
+        leaf_scale_i <- stochtree::sample_tau_one_iteration(active_forest_mean, rng, a_leaf, b_leaf[mm,mm])
         current_leaf_scale[mm,mm]  <-as.matrix(leaf_scale_i)
 
         current_sigma2_i <- stochtree::sample_sigma2_one_iteration(outcome_train, rng, nu_bart, lambda_bart[mm,mm])
@@ -312,15 +347,12 @@ if(sv == "SV"){
           }
         }  
         variable_weight_splits_ls[mm,] <- variable_weights
-        variable_count_splits_ls[mm,]  <- variable_count_splits
-        # var_count_matrix[i,,mm] = variable_count_splits
+        
         
         
         if(i %in% save_set){
-          #first time that this appears, so hear should start adding the index
-          mask <- which(i == save_set)
-          index_saved <- save_ind[mask]
-          
+          #first time that this appears, so here should start count the index
+          index_saved <- which(i == save_set)
           global_var_samples[index_saved, mm] <- current_sigma2_i
           leaf_scale_samples[index_saved, mm] <- leaf_scale_i
           var_count_matrix[index_saved,,mm]   <- variable_count_splits
@@ -333,7 +365,7 @@ if(sv == "SV"){
         eta[,mm]        <- Y_[,mm] -  Y_fit_BART[,mm]
 
     }
-    ###------------------------------ Step 2: -----------------------------------###
+    ###--------------------- Step 2: Idiossincratic Vol -------------------------###
     ###--------------- Sample stochastic volatility parameters ------------------###
     ###--------------------------------------------------------------------------###
 
@@ -353,11 +385,11 @@ if(sv == "SV"){
           sv_params_mcmc[index_saved,,mm] = svdraw_mm$para[, c("mu", "phi", "sigma")]
         }
 
-        weights = as.numeric(exp(svdraw_mm$latent)) # Double Check this later.
-        forest_dataset_train_ls[[mm]] = stochtree::createForestDataset(X_train, basis = NULL, variance_weights = weights)
-        H[,mm] = log(sigma_mat[mm]^2) + svdraw_mm$latent #Is this necessary in the Stochtree Framework? I need to redo this math...
+        weights <- as.numeric(exp(svdraw_mm$latent)) # Double Check this later.
+        forest_dataset_train_ls[[mm]] <- stochtree::createForestDataset(X_train, basis = NULL, variance_weights = weights)
+        H[,mm] <- log(sigma_mat[mm]^2) + svdraw_mm$latent # Sum of the two vols(?)
       }else{
-        H[,mm] = log(sigma_mat[mm]^2)
+        H[,mm] <- log(sigma_mat[mm]^2)
       }
     }
     H[H<log(1e-6)] <- log(1e-6)
@@ -368,9 +400,9 @@ if(sv == "SV"){
     
     ###------------------- Step 3.1: Sample HS hyperparameters ------------------###
     
-    resid = Y_train - Y_fit_BART
+    resid <- Y_train - Y_fit_BART
 
-    Ft =  get_factors(resid,S=exp(H),H=exp(Omega),L=Lambda,q=Q,t=TT)
+    Ft <-  get_factors(resid,S=exp(H),H=exp(Omega),L=Lambda,q=Q,t=TT)
     id.L <- FALSE # whether factor model for the errors should be identified
     if(!id.L) Ft <- apply(Ft, 2, function(x) (x-mean(x))/sd(x)) # normalize factor draw
     Lambda <- get_Lambda(resid, fac = Ft, S = exp(H), pr= theta_Lambda , m=M, q=Q, id.fac=!id_Lambda[1,Q])
@@ -394,25 +426,25 @@ if(sv == "SV"){
     
     if(sv == "SV"){
         for(qq in 1:Q){
-            fsvdraw_qq = stochvol::svsample_general_cpp(Ft[,qq], startpara = fsv_draw[[qq]], 
+            fsvdraw_qq <- stochvol::svsample_general_cpp(Ft[,qq], startpara = fsv_draw[[qq]], 
                                               startlatent = fsv_h_latent[[qq]], priorspec = fsv_priors[[qq]])
-            fsv_draw[[qq]][c("mu", "phi", "sigma")] = as.list(fsvdraw_qq$para[, c("mu", "phi", "sigma")])
-            fsv_h_latent[[qq]] = fsvdraw_qq$latent
-            fsv_params_mat[qq, ] = c(fsvdraw_qq$para[, c("mu", "phi", "sigma")], fsvdraw_qq$latent[TT])
+            fsv_draw[[qq]][c("mu", "phi", "sigma")] <- as.list(fsvdraw_qq$para[, c("mu", "phi", "sigma")])
+            fsv_h_latent[[qq]]   <- fsvdraw_qq$latent
+            fsv_params_mat[qq, ] <- c(fsvdraw_qq$para[, c("mu", "phi", "sigma")], fsvdraw_qq$latent[TT])
             if(i %in% save_set){
-              fsv_params_mcmc[index_saved,,qq] = fsvdraw_qq$para[, c("mu", "phi", "sigma")]
+              fsv_params_mcmc[index_saved,,qq] <- fsvdraw_qq$para[, c("mu", "phi", "sigma")]
             }
-            Omega[,qq] = fsvdraw_qq$latent
+            Omega[,qq] <- fsvdraw_qq$latent
       }
     }else{
         for(qq in 1:Q){
-            Omega[,qq] = 0
+            Omega[,qq] <- 0
         }
     }
 
     for(tt in 1:TT){
-      s_t = Lambda %*%diag( exp(Omega[tt,] ) ) %*% t(Lambda) + diag(exp(H[tt,]))
-      Sig_t[tt,,] = s_t 
+      s_t <- Lambda %*%diag( exp(Omega[tt,] ) ) %*% t(Lambda) + diag(exp(H[tt,]))
+      Sig_t[tt,,] <- s_t 
     }
 
     if( i %in% save_set){
@@ -421,10 +453,10 @@ if(sv == "SV"){
         ###----------------------------- Storage ------------------------------------###
         ###--------------------------------------------------------------------------###
 
-        # Y_forecast_store[index_saved,,]   <- (Yfc*t(matrix(Ysd,M,fhorz)))+t(matrix(Ymu,M,fhorz))
-        Hfc_store[index_saved,,]          <- Hfc
         H_store[index_saved,,]            <- exp(H)
         Y_store[index_saved,,]            <- (Y_fit_BART*t(matrix(Ysd,M,TT)))+t(matrix(Ymu,M,TT))
+        Loadings_store[index_saved,,]     <- Lambda
+        Omega_store[index_saved,,]        <- Omega
       }
 
     iter_update <- 250
@@ -438,7 +470,42 @@ if(sv == "SV"){
 
     }
 
+    model_params <- list(
+    "sigma2_init" = sigma2_init, 
+    "sigma_leaf_init" = sigma_leaf_init,
+    "a_global" = nu_bart,
+    "b_global" = lambda_bart, 
+    "a_leaf" = a_leaf, 
+    "b_leaf" = b_leaf,
+    "a_forest" = a_forest, 
+    "b_forest" = b_forest,
+    "outcome_mean" = Ymu,
+    "outcome_scale" = Ysd, 
+    "num_covariates" = ncol(X_train), 
+    "num_samples" = num_samples, 
+    "num_burnin" = num_burnin, 
+    "num_mcmc" = num_mcmc, 
+    "bart_prior" = bart_prior,
+    "sv" = sv 
+  )
+  result <- list(
+    "model_params"           = model_params, 
+    "lags"                   = p,
+    "y_hat_train"            = Y_store,
+    "H_Matrix"               = H_store,
+    "L_Matrix"               = Loadings_store,
+    "Dt"                     = Omega_store,
+    "Yt_train"               = Y_train,
+    "Y_raw"                  = data,
+    "forest_samples_mean_ls" = forest_container_ls,
+    "var_count_matrix"       = var_count_matrix
+    )
+  
+  result[["mean_forests"]] = forest_container_ls
+  
+  result[["var_count_matrix"]] = var_count_matrix
 
+  return(result)
   }
 
 
