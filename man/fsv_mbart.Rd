@@ -2,40 +2,42 @@
 % Please edit documentation in R/fsv_bart.R
 \name{fsv_mbart}
 \alias{fsv_mbart}
-\title{Title}
+\title{Run the Multivariate BART Algorithm for Supervised Learning.}
 \usage{
 fsv_mbart(
-  y_raw,
-  lags = 1,
-  fhorz = 1,
+  data,
+  lags = 1L,
   bart_prior = "CGM",
-  sv = "none",
-  keep_samples = FALSE,
-  num_burnin = 100,
-  num_mcmc = 100,
-  num_thin = 1,
+  SV = FALSE,
+  num_burnin = 100L,
+  num_mcmc = 100L,
+  num_thin = 1L,
+  keep_burnin = FALSE,
   params = ls()
 )
 }
 \arguments{
-\item{y_raw}{}
+\item{data}{Outcome to be modeled by the ensemble. This is a TxM matriz.}
 
-\item{lags}{}
+\item{lags}{Number of Lags used in the VAR(p) system.}
 
-\item{fhorz}{}
+\item{bart_prior}{Which Prior we are going to use in the BART: CGM, DART or Minn.}
 
-\item{bart_prior}{}
+\item{SV}{Stochastic Volatility Flag.}
 
-\item{sv}{}
+\item{num_burnin}{Number of "burn-in" iterations of the MCMC sampler. Default: 100.}
 
-\item{keep_samples}{}
+\item{num_mcmc}{Number of "retained" iterations of the MCMC sampler. Default: 100.}
 
-\item{num_burnin}{}
+\item{num_thin}{}
 
-\item{num_mcmc}{}
+\item{keep_burnin}{Whether or not "burn-in" samples should be stored. Default FALSE.}
 
 \item{params}{}
 }
+\value{
+List of sampling outputs and a wrapper around the sampled forests (which can be used for in-memory prediction on new data).
+}
 \description{
-Title
+Run the Multivariate BART Algorithm for Supervised Learning.
 }
