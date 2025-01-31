@@ -6,6 +6,8 @@
 \usage{
 fsv_mbart(
   data,
+  Y_test = NULL,
+  n_ahead = NULL,
   lags = 1L,
   bart_prior = "CGM",
   SV = FALSE,
@@ -18,6 +20,10 @@ fsv_mbart(
 }
 \arguments{
 \item{data}{Outcome to be modeled by the ensemble. This is a TxM matriz.}
+
+\item{Y_test}{(Optional) include the data to allow for a forecast. This will result in not saving all the tree info in the container.}
+
+\item{n_ahead}{(Optional) include the forecasting horizon, default h = 12 if you don't provide.}
 
 \item{lags}{Number of Lags used in the VAR(p) system.}
 

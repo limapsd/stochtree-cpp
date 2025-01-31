@@ -70,7 +70,9 @@ preprocessmBartParams <- function(params) {
 
 get_facload <- function(yy,xx,l_sd){
   V_prinv <- diag(NCOL(xx))/l_sd
-  V_lambda <- solve(crossprod(xx) + V_prinv)
+  V_lambda_temp <- try(solve(crossprod(xx) + V_prinv))
+  if (is(V_lambda_temp,"try-error")) browser()
+  V_lambda <-V_lambda_temp
   lambda_mean <- V_lambda %*% (crossprod(xx,yy))
   
   lambda_draw <- lambda_mean + t(chol(V_lambda)) %*% rnorm(NCOL(xx))

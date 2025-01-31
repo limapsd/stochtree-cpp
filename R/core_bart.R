@@ -253,6 +253,7 @@ core_bart <-function(y_train, X_train,
   result[["mean_forests"]] = forest_samples_mean
   result[["y_hat_train"]] = y_hat_train
   result[["var_count_matrix"]] = var_count_matrix
+  if (has_test) result[["y_hat_test"]] = y_hat_test
   
   rm(forest_model_mean)
   rm(forest_dataset_mean)

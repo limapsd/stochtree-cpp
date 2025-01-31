@@ -2,6 +2,8 @@
 #' Run the Multivariate BART Algorithm for Supervised Learning.
 #'
 #' @param data Outcome to be modeled by the ensemble. This is a TxM matriz.
+#' @param Y_test (Optional) include the data to allow for a forecast. This will result in not saving all the tree info in the container. 
+#' @param n_ahead (Optional) include the forecasting horizon, default h = 12 if you don't provide.
 #' @param lags Number of Lags used in the VAR(p) system.
 #' @param bart_prior Which Prior we are going to use in the BART: CGM, DART or Minn.
 #' @param SV Stochastic Volatility Flag.
@@ -15,7 +17,9 @@
 #' @export
 #'
 #' @examples
-fsv_mbart <- function(data, 
+fsv_mbart <- function(data,
+                      Y_test = NULL,
+                      n_ahead = NULL, 
                       lags = 1L,
                       bart_prior = "CGM",
                       SV = FALSE,
@@ -30,7 +34,7 @@ fsv_mbart <- function(data,
 ###-------------------- Preprocessing the VAR objects  ----------------------###
 ###--------------------------------------------------------------------------###
 
-  num_samples <- num_burnin + num_mcmc
+  num_samples <- num_burnin + num_mcmc 
   num_saved   <- num_mcmc %/% num_thin
   if(keep_burnin){
     save_set    <- seq(from = num_thin, to = num_samples, by = num_thin)
@@ -67,17 +71,29 @@ fsv_mbart <- function(data,
   X_train <- embed(Y_tmp, dimension = p + 1)[, -(1:M)]
   colnames(X_train) <- paste0(colnames(Y_tmp), ".t-", sort(rep(1:p,M)))
   Y_train <- Y_tmp[-c(1:p), ]
-
   TT <- Traw - p
+
+  datamat <- data.frame(cbind(Y_train, X_train))
+  has_test <- FALSE
+  
+  variable_names <- colnames(Y_train)
+  index_names    <- rownames(Y_train)
+  feature_types  <- as.integer(rep(0, K))
+  
+  
+  if(!is.null(Y_test)){
+    if(is.null(n_ahead)) n_ahead <- 12
+    predictions <- array(as.numeric(NA), c(num_saved, n_ahead, M), dimnames = list(paste0("mcmc_", 1:num_saved), paste0("t+", 1:n_ahead), variable_names))
+    sigma_predictions<-array(NA, c(num_saved, n_ahead, M))
+    LPL_draws <- matrix(as.numeric(NA), num_saved, n_ahead)
+    colnames(LPL_draws) <- paste0("t+", 1:n_ahead)
+    has_test <- TRUE
+  }
 
  if(TT!=nrow(Y_train) | TT!=nrow(X_train)){
    stop("Something went wrong: Tobs != nrow(Y). \n")
  }
 
-  variable_names <- colnames(Y_train)
-  index_names    <- rownames(Y_train)
-  feature_types  <- as.integer(rep(0, K))
-  
   bart_params <- preprocessmBartParams(params)
 
   alpha <- bart_params$alpha
@@ -118,7 +134,9 @@ fsv_mbart <- function(data,
   
   # Initialization of the covariance dependes on the high dimensionality 
   if(TT <= K){
-    sigma2hat <- var(Y_train)
+    beta_ols  <- MASS::ginv(XtX)%*%XtY
+    resid_mle <-  Y_train - X_train %*%beta_ols
+    sigma2hat <-  ( t(resid_mle)%*%(resid_mle) )/TT
   }else{
     beta_ols  <- solve(XtX) %*% XtY
     resid_mle <- Y_train - X_train %*%beta_ols
@@ -304,19 +322,30 @@ if (SV){
   for (i in 1:num_samples) {
     
     is_mcmc <- i > num_burnin
-    
-    if (is_mcmc) {
-      mcmc_counter <- i - (num_burnin)
-      if (mcmc_counter %% num_thin == 0) keep_sample <- TRUE
-      else keep_sample <- FALSE
+
+    # if (is_mcmc) {
+    #   mcmc_counter <- i - (num_burnin)
+    #   if (mcmc_counter %% num_thin == 0) keep_sample <- TRUE
+    #   else keep_sample <- FALSE
+    # } else {
+    #   if (keep_burnin) keep_sample <- TRUE
+    #   else keep_sample <- FALSE
+    # }
+
+  if (is_mcmc) {
+    mcmc_counter <- i - num_burnin
+    if (has_test) {
+      keep_sample <- FALSE
     } else {
-      if (keep_burnin) keep_sample <- TRUE
-      else keep_sample <- FALSE
+      keep_sample <- (mcmc_counter %% num_thin == 0)
     }
-    
-    
-    
-    
+  } else {
+    if (has_test || !keep_burnin) {
+      keep_sample <- FALSE
+    } else {
+      keep_sample <- TRUE
+    }
+  }  
     for(mm in 1:M){  
         # Sampling model Coefficients:
         Y_ <- Y_train - tcrossprod(Ft, Lambda)
@@ -365,12 +394,11 @@ if (SV){
             log_probability_spits <- draw_minessota_split(variable_count_splits, mm,lag_index ,diag(sigma2hat),lambda_1, lambda_2, rng)
             variable_weights      <- exp(log_probability_spits)
             
-            
-              # alpha_sampler_1 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
-              # lambda_1        <- alpha_sampler_1$alpha
-              # 
-              # alpha_sampler_2 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
-              # lambda_2 <- alpha_sampler_2$alpha
+            # alpha_sampler_1 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
+            # lambda_1        <- alpha_sampler_1$alpha
+            # 
+            # alpha_sampler_2 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
+            # lambda_2 <- alpha_sampler_2$alpha
               
               
             }
@@ -453,6 +481,7 @@ if (SV){
       tau_Lambda[qq] <- hs_draw$tau
       zeta_Lambda[qq] <- hs_draw$zeta
     }
+    theta_Lambda[theta_Lambda<1e-5] <- 1e-5
 
     ###------------------- Step 3.3: Sample Factor SV ------------------###
     
@@ -489,6 +518,57 @@ if (SV){
         Omega_store[index_saved,,]        <- exp(Omega)
         y_hat_store[index_saved,,]        <- (Y_fit_BART*t(matrix(Ysd,M,TT)))+t(matrix(Ymu,M,TT))
         Loadings_store[index_saved,,]     <- Lambda
+
+        if (has_test){
+          
+        ###------------------------------------------------------------------------------###
+        ###----------------------------- Forecasting ------------------------------------###
+        ###------------------------------------------------------------------------------###
+
+          X_hat <- datamat[nrow(datamat), 1:K]
+          if(SV){
+            HT <- H[TT,] - log(as.numeric(sigma_mat)^2)
+            OT <- Omega[TT,]
+          }else{
+            HT <- H[TT,]
+          }
+          
+          X_fore_k <- as.matrix(X_hat)
+          forest_dataset <- stochtree::createForestDataset(X_fore_k)
+          mean_forecast <- matrix(0,M)
+
+          for(k in 1:n_ahead){
+            for(mm in 1:M){
+              active_forest_sample_mean <- active_forest_ls[[mm]]
+              mean_forecast[mm] <- active_forest_sample_mean$predict_raw(forest_dataset)
+            }
+            if(SV){
+              h_fore <- log(as.numeric(sigma_mat)^2) + (sv_params_mat[, 1] + sv_params_mat[ , 2] * (HT - sv_params_mat[,1]) + sv_params_mat[ , 3]*rnorm(M))
+              O_fore <- (fsv_params_mat[, 1] + fsv_params_mat[ , 2] * (OT - fsv_params_mat[,1]) + fsv_params_mat[ , 3]*rnorm(Q))
+              Sigma_fore <- Lambda %*% diag(exp(O_fore)) %*% t(Lambda) + diag(exp(h_fore))
+            }else{
+              h_fore    <- HT
+              Sigma_fore <- diag(exp(h_fore))
+            }
+            predictions[index_saved,k,] <- MASS::mvrnorm(1, mean_forecast, Sigma_fore)
+            sigma_predictions[index_saved,k,] <- diag(Sigma_fore)
+          
+            Y_obs_vec                   <- as.vector(Y_test[k,])
+            mean_forecast_rescaled      <- mean_forecast*matrix(Ysd,nrow = M, ncol = 1) + matrix(Ymu,nrow = M, ncol = 1 )
+            Sigma_fore_rescaled         <- diag(Ysd) %*%Sigma_fore%*% diag(Ysd)
+
+            LPL_draws[index_saved,k] <- mvtnorm::dmvnorm(Y_obs_vec, mean_forecast_rescaled, Sigma_fore_rescaled, log = TRUE)
+
+          if(k < n_ahead){
+              if(p == 1){
+                  X_fore_k[1,] <- predictions[i,k,]
+              }else{
+                  X_fore_k[1,] <- c(predictions[index_saved,k,], X_fore_k[1:((p-1)*M)])
+              }
+              forest_dataset <- stochtree::createForestDataset(X_fore_k)
+            }
+          }# end 1:k
+        }# has test
       
       }
 
@@ -501,7 +581,14 @@ if (SV){
       start <- Sys.time() 
     }
 
+    }#end 1:mcmc_draws
+
+    for(j in 1:M){
+      predictions[,,j] <- predictions[,,j]*Ysd[j] + Ymu[j]
     }
+    
+
+
 
     dimnames(y_hat_store)      <- list(paste0("mcmc_", 1:num_saved), index_names, variable_names)
     dimnames(sv_params_mcmc)   <- list(paste0("mcmc_", 1:num_saved), c("mu", "phi", "sigma"), variable_names)
@@ -536,7 +623,7 @@ if (SV){
     "Ht"                     = H_store,
     "L"                      = Loadings_store,
     "Dt"                     = Omega_store,
-    "datamat"                = data.frame(cbind(Y_train, X_train)),
+    "datamat"                = datamat,
     "Y_raw"                  = data,
     "forest_samples_mean_ls" = forest_container_ls,
     "var_count_matrix"       = var_count_matrix,
@@ -549,7 +636,18 @@ if (SV){
       result[["sv_params_mcmc"]]  <- sv_params_mcmc
       result[["fsv_params_mcmc"]] <- fsv_params_mcmc
     }
-  
+    if(has_test){
+      result[["predictions"]]       <- predictions
+      result[["sigma_predictions"]] <- sigma_predictions
+    }
+
+    numerical_normalizer <- apply(LPL_draws, 2 , max) - 700
+    LPL <- log(colMeans(exp( t(t(LPL_draws) - numerical_normalizer)))) + numerical_normalizer
+    names(LPL) <- paste0("t+", 1:n_ahead)
+
+    result$LPL <- LPL
+    result$LPL_draws <- LPL_draws
+
    class(result) <- "fsv_mbart"
    
    rm(forest_container_ls)
