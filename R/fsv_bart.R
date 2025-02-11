@@ -87,6 +87,11 @@ fsv_mbart <- function(data,
     sigma_predictions<-array(NA, c(num_saved, n_ahead, M))
     LPL_draws <- matrix(as.numeric(NA), num_saved, n_ahead)
     colnames(LPL_draws) <- paste0("t+", 1:n_ahead)
+    PL_univariate_draws <- array(as.numeric(NA), c(num_saved, n_ahead, M),
+                          dimnames = list(paste0("mcmc_", 1:num_saved),
+                                          paste0("t+", 1:n_ahead),
+                                          variable_names))
+    
     has_test <- TRUE
   }
 
@@ -445,9 +450,9 @@ if (SV){
           sv_params_mcmc[index_saved,,mm] = svdraw_mm$para[, c("mu", "phi", "sigma")]
         }
 
-        weights <- as.numeric(exp(svdraw_mm$latent)) # Double Check this later.
+        weights <- as.numeric(exp(svdraw_mm$latent)) 
         forest_dataset_train_ls[[mm]] <- stochtree::createForestDataset(X_train, basis = NULL, variance_weights = weights)
-        H[,mm] <- log(sigma_mat[mm]^2) + svdraw_mm$latent # Sum of the two vols(?)
+        H[,mm] <- log(sigma_mat[mm]^2) + svdraw_mm$latent 
       }else{
         H[,mm] <- log(sigma_mat[mm]^2)
       }
@@ -503,10 +508,10 @@ if (SV){
         }
     }
 
-    for(tt in 1:TT){
-      s_t <- Lambda %*%diag( exp(Omega[tt,] ) ) %*% t(Lambda) + diag(exp(H[tt,]))
-      Sig_t[tt,,] <- s_t 
-    }
+    # for(tt in 1:TT){
+    #   s_t <- Lambda %*%diag( exp(Omega[tt,] ) ) %*% t(Lambda) + diag(exp(H[tt,]))
+    #   Sig_t[tt,,] <- s_t 
+    # }
 
     if( i %in% save_set){
       
@@ -553,15 +558,13 @@ if (SV){
             predictions[index_saved,k,] <- MASS::mvrnorm(1, mean_forecast, Sigma_fore)
             sigma_predictions[index_saved,k,] <- diag(Sigma_fore)
           
-            Y_obs_vec                   <- as.vector(Y_test[k,])
-            mean_forecast_rescaled      <- mean_forecast*matrix(Ysd,nrow = M, ncol = 1) + matrix(Ymu,nrow = M, ncol = 1 )
-            Sigma_fore_rescaled         <- diag(Ysd) %*%Sigma_fore%*% diag(Ysd)
-
-            LPL_draws[index_saved,k] <- mvtnorm::dmvnorm(Y_obs_vec, mean_forecast_rescaled, Sigma_fore_rescaled, log = TRUE)
+            Y_obs_vec                   <- as.vector( (Y_test[k,] - Ymu )/Ysd)
+            LPL_draws[index_saved,k] <- mvtnorm::dmvnorm(Y_obs_vec, mean_forecast, Sigma_fore, log = TRUE)
+            PL_univariate_draws[index_saved,k,] <- stats::dnorm(Y_obs_vec, mean_forecast, sqrt(diag(Sigma_fore)))
 
           if(k < n_ahead){
               if(p == 1){
-                  X_fore_k[1,] <- predictions[i,k,]
+                  X_fore_k[1,] <- predictions[index_saved,k,]
               }else{
                   X_fore_k[1,] <- c(predictions[index_saved,k,], X_fore_k[1:((p-1)*M)])
               }
@@ -582,19 +585,12 @@ if (SV){
     }
 
     }#end 1:mcmc_draws
-
-    for(j in 1:M){
-      predictions[,,j] <- predictions[,,j]*Ysd[j] + Ymu[j]
-    }
     
-
-
-
     dimnames(y_hat_store)      <- list(paste0("mcmc_", 1:num_saved), index_names, variable_names)
     dimnames(sv_params_mcmc)   <- list(paste0("mcmc_", 1:num_saved), c("mu", "phi", "sigma"), variable_names)
     dimnames(fsv_params_mcmc)  <- list(paste0("mcmc_", 1:num_saved), c("mu", "phi", "sigma"), paste0("fctor_",1:Q))  
-    dimnames(H_store)          <- list(paste0("mcmc_",1:num_saved),index_names, variable_names)
-    dimnames(Omega_store)      <- list(paste0("mcmc_",1:num_saved),index_names, paste0("fctor_",1:Q))
+    dimnames(H_store)          <- list(paste0("mcmc_", 1:num_saved),index_names, variable_names)
+    dimnames(Omega_store)      <- list(paste0("mcmc_", 1:num_saved),index_names, paste0("fctor_",1:Q))
     dimnames(var_count_matrix) <- list(paste0("mcmc_", 1:num_saved), colnames(X_train), variable_names)
 
 
@@ -637,17 +633,25 @@ if (SV){
       result[["fsv_params_mcmc"]] <- fsv_params_mcmc
     }
     if(has_test){
+      
+      for(j in 1:M){
+        predictions[,,j] <- predictions[,,j]*Ysd[j] + Ymu[j]
+      }
       result[["predictions"]]       <- predictions
       result[["sigma_predictions"]] <- sigma_predictions
+      
+      numerical_normalizer <- apply(LPL_draws, 2 , max) - 700
+      LPL <- log(colMeans(exp( t(t(LPL_draws) - numerical_normalizer)))) + numerical_normalizer
+      names(LPL) <- paste0("t+", 1:n_ahead)
+      
+      result$LPL <- LPL
+      result$LPL_draws <- LPL_draws
+      result$LPL_univariate <- log(apply(PL_univariate_draws, 2:3, mean))
+      
+      
     }
 
-    numerical_normalizer <- apply(LPL_draws, 2 , max) - 700
-    LPL <- log(colMeans(exp( t(t(LPL_draws) - numerical_normalizer)))) + numerical_normalizer
-    names(LPL) <- paste0("t+", 1:n_ahead)
-
-    result$LPL <- LPL
-    result$LPL_draws <- LPL_draws
-
+    
    class(result) <- "fsv_mbart"
    
    rm(forest_container_ls)
@@ -708,6 +712,9 @@ predict.fsv_mbart <- function(fsv_mbart, Y_test, n_ahead = 1L){
     predictions <- array(as.numeric(NA), c(num_saved, n_ahead, M), dimnames = list(paste0("mcmc_", 1:num_saved), paste0("t+", 1:n_ahead), variable_names))
     sigma_predictions<-array(NA, c(num_saved, n_ahead, M))
     LPL_draws <- matrix(as.numeric(NA), num_saved, n_ahead)
+    PL_univariate_draws <- array(as.numeric(NA), c(num_saved, n_ahead, M),
+                                 dimnames = list(paste0("mcmc_", 1:num_saved), paste0("t+", 1:n_ahead), variable_names))
+    
     colnames(LPL_draws) <- paste0("t+", 1:n_ahead)
 
     
@@ -759,6 +766,7 @@ predict.fsv_mbart <- function(fsv_mbart, Y_test, n_ahead = 1L){
           Sigma_fore_rescaled         <- diag(Ysd) %*%Sigma_fore%*% diag(Ysd)
 
           LPL_draws[i,k] <- mvtnorm::dmvnorm(Y_obs_vec, mean_forecast_rescaled, Sigma_fore_rescaled, log = TRUE)
+          PL_univariate_draws[i,k,] <- stats::dnorm(Y_obs_vec, mean_forecast_rescaled, sqrt(diag(Sigma_fore_rescaled)))
 
           if(k < n_ahead){
               if(p == 1){
@@ -785,6 +793,8 @@ predict.fsv_mbart <- function(fsv_mbart, Y_test, n_ahead = 1L){
     
     out$LPL <- LPL
     out$LPL_draws <- LPL_draws
+    out$LPL_univariate <- log(apply(PL_univariate_draws, 2:3, mean))
+
     
     return(out)
 
