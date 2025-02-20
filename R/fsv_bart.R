@@ -124,8 +124,10 @@ fsv_mbart <- function(data,
   b_dart               <- bart_params$b_dart
 
   if(bart_prior == "minn"){
-    lambda_1 <- 1.0
-    lambda_2 <- 0.5
+    lambda_1 <- bart_params$lambda_1
+    lambda_2 <- bart_params$lambda_2
+    sample_lambda <- bart_params$sample_lambda
+    if(sample_lambda) lambda_store <-array()
   }
   
   outcome_model_type <- 0 # numeric
@@ -399,12 +401,13 @@ if (SV){
             log_probability_spits <- draw_minessota_split(variable_count_splits, mm,lag_index ,diag(sigma2hat),lambda_1, lambda_2, rng)
             variable_weights      <- exp(log_probability_spits)
             
-            # alpha_sampler_1 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
-            # lambda_1        <- alpha_sampler_1$alpha
-            # 
-            # alpha_sampler_2 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
-            # lambda_2 <- alpha_sampler_2$alpha
-              
+            if(learn_lambda){  
+              alpha_sampler_1 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
+              lambda_1        <- alpha_sampler_1$alpha
+
+              alpha_sampler_2 <- sample_alpha_one_iteration(log_probability_spits, 0.5, 1, rho_dart, rng)
+              lambda_2 <- alpha_sampler_2$alpha
+            }
               
             }
           }

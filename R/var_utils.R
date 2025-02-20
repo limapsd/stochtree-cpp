@@ -37,7 +37,8 @@ preprocessmBartParams <- function(params) {
                       max_depth = 10, n_trees = 200, cutpoint_grid_size = 100,
                       nu = 4, lambda = NULL, a_leaf = 2, b_leaf = NULL, 
                       a_forest = 1, b_forest = 1,random_seed = -1,sample_sigma_leaf = TRUE, 
-                      alpha_dart = NULL, rho_dart = NULL, a_dart = 1, b_dart = 0.5)
+                      alpha_dart = NULL, rho_dart = NULL, a_dart = 1, b_dart = 0.5,
+                      lambda_1 = 1, lambda_2 =0.5, sample_lambda = FALSE)
   
   for (key in names(params)) {
     if (!key %in% names(processed_params)) {
