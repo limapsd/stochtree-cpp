@@ -17,6 +17,10 @@ Wrapper around a C++ container of tree ensembles
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-ForestSamples-new}{\code{ForestSamples$new()}}
+\item \href{#method-ForestSamples-collapse}{\code{ForestSamples$collapse()}}
+\item \href{#method-ForestSamples-combine_forests}{\code{ForestSamples$combine_forests()}}
+\item \href{#method-ForestSamples-add_to_forest}{\code{ForestSamples$add_to_forest()}}
+\item \href{#method-ForestSamples-multiply_forest}{\code{ForestSamples$multiply_forest()}}
 \item \href{#method-ForestSamples-load_from_json}{\code{ForestSamples$load_from_json()}}
 \item \href{#method-ForestSamples-append_from_json}{\code{ForestSamples$append_from_json()}}
 \item \href{#method-ForestSamples-load_from_json_string}{\code{ForestSamples$load_from_json_string()}}
@@ -32,7 +36,7 @@ Wrapper around a C++ container of tree ensembles
 \item \href{#method-ForestSamples-load_json}{\code{ForestSamples$load_json()}}
 \item \href{#method-ForestSamples-num_samples}{\code{ForestSamples$num_samples()}}
 \item \href{#method-ForestSamples-num_trees}{\code{ForestSamples$num_trees()}}
-\item \href{#method-ForestSamples-output_dimension}{\code{ForestSamples$output_dimension()}}
+\item \href{#method-ForestSamples-leaf_dimension}{\code{ForestSamples$leaf_dimension()}}
 \item \href{#method-ForestSamples-is_constant_leaf}{\code{ForestSamples$is_constant_leaf()}}
 \item \href{#method-ForestSamples-is_exponentiated}{\code{ForestSamples$is_exponentiated()}}
 \item \href{#method-ForestSamples-add_forest_with_constant_leaves}{\code{ForestSamples$add_forest_with_constant_leaves()}}
@@ -75,9 +79,9 @@ Create a new ForestContainer object.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{ForestSamples$new(
   num_trees,
-  output_dimension = 1,
-  is_leaf_constant = F,
-  is_exponentiated = F
+  leaf_dimension = 1,
+  is_leaf_constant = FALSE,
+  is_exponentiated = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -86,7 +90,7 @@ Create a new ForestContainer object.
 \describe{
 \item{\code{num_trees}}{Number of trees}
 
-\item{\code{output_dimension}}{Dimensionality of the outcome model}
+\item{\code{leaf_dimension}}{Dimensionality of the outcome model}
 
 \item{\code{is_leaf_constant}}{Whether leaf is constant}
 
@@ -96,6 +100,85 @@ Create a new ForestContainer object.
 }
 \subsection{Returns}{
 A new \code{ForestContainer} object.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestSamples-collapse"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestSamples-collapse}{}}}
+\subsection{Method \code{collapse()}}{
+Collapse forests in this container by a pre-specified batch size.
+For example, if we have a container of twenty 10-tree forests, and we
+specify a \code{batch_size} of 5, then this method will yield four 50-tree
+forests. "Excess" forests remaining after the size of a forest container
+is divided by \code{batch_size} will be pruned from the beginning of the
+container (i.e. earlier sampled forests will be deleted). This method
+has no effect if \code{batch_size} is larger than the number of forests
+in a container.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestSamples$collapse(batch_size)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{batch_size}}{Number of forests to be collapsed into a single forest}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestSamples-combine_forests"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestSamples-combine_forests}{}}}
+\subsection{Method \code{combine_forests()}}{
+Merge specified forests into a single forest
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestSamples$combine_forests(forest_inds)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{forest_inds}}{Indices of forests to be combined (0-indexed)}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestSamples-add_to_forest"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestSamples-add_to_forest}{}}}
+\subsection{Method \code{add_to_forest()}}{
+Add a constant value to every leaf of every tree of a given forest
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestSamples$add_to_forest(forest_index, constant_value)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{forest_index}}{Index of forest whose leaves will be modified (0-indexed)}
+
+\item{\code{constant_value}}{Value to add to every leaf of every tree of the forest at \code{forest_index}}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestSamples-multiply_forest"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestSamples-multiply_forest}{}}}
+\subsection{Method \code{multiply_forest()}}{
+Multiply every leaf of every tree of a given forest by constant value
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestSamples$multiply_forest(forest_index, constant_multiple)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{forest_index}}{Index of forest whose leaves will be modified (0-indexed)}
+
+\item{\code{constant_multiple}}{Value to multiply through by every leaf of every tree of the forest at \code{forest_index}}
+}
+\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -139,7 +222,7 @@ Append to a \code{ForestContainer} object from a json object
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-NULL
+None
 }
 }
 \if{html}{\out{<hr>}}
@@ -183,7 +266,7 @@ Append to a \code{ForestContainer} object from a json object
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-NULL
+None
 }
 }
 \if{html}{\out{<hr>}}
@@ -433,12 +516,12 @@ Tree count
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-ForestSamples-output_dimension"></a>}}
-\if{latex}{\out{\hypertarget{method-ForestSamples-output_dimension}{}}}
-\subsection{Method \code{output_dimension()}}{
+\if{html}{\out{<a id="method-ForestSamples-leaf_dimension"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestSamples-leaf_dimension}{}}}
+\subsection{Method \code{leaf_dimension()}}{
 Return output dimension of trees in a \code{ForestContainer} object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{ForestSamples$output_dimension()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{ForestSamples$leaf_dimension()}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
@@ -455,7 +538,7 @@ Return constant leaf status of trees in a \code{ForestContainer} object
 }
 
 \subsection{Returns}{
-\code{T} if leaves are constant, \code{F} otherwise
+\code{TRUE} if leaves are constant, \code{FALSE} otherwise
 }
 }
 \if{html}{\out{<hr>}}
@@ -468,7 +551,7 @@ Return exponentiation status of trees in a \code{ForestContainer} object
 }
 
 \subsection{Returns}{
-\code{T} if leaf predictions must be exponentiated, \code{F} otherwise
+\code{TRUE} if leaf predictions must be exponentiated, \code{FALSE} otherwise
 }
 }
 \if{html}{\out{<hr>}}

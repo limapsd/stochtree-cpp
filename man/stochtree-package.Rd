@@ -4,14 +4,16 @@
 \name{stochtree-package}
 \alias{stochtree}
 \alias{stochtree-package}
-\title{stochtree: Stochastic tree ensembles (XBART and BART) for supervised learning and causal inference}
+\title{stochtree: Stochastic Tree Ensembles (XBART and BART) for Supervised Learning and Causal Inference}
 \description{
-Stochastic tree ensembles (XBART and BART) for supervised learning and causal inference.
+Flexible stochastic tree ensemble software. Robust implementations of Bayesian Additive Regression Trees (BART) Chipman, George, McCulloch (2010) \doi{10.1214/09-AOAS285} for supervised learning and Bayesian Causal Forests (BCF) Hahn, Murray, Carvalho (2020) \doi{10.1214/19-BA1195} for causal inference. Enables model serialization and parallel sampling and provides a low-level interface for custom stochastic forest samplers.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://stochastictree.github.io/stochtree-r/}
+  \item \url{https://stochtree.ai/}
+  \item \url{https://github.com/StochasticTree/stochtree}
+  \item Report bugs at \url{https://github.com/StochasticTree/stochtree/issues}
 }
 
 }
@@ -24,6 +26,19 @@ Authors:
   \item Jared Murray
   \item Carlos Carvalho
   \item Jingyu He
+}
+
+Other contributors:
+\itemize{
+  \item Pedro Lima [contributor]
+  \item stochtree contributors [copyright holder]
+  \item Eigen contributors (C++ source uses the Eigen library for matrix operations, see inst/COPYRIGHTS) [copyright holder]
+  \item xgboost contributors (C++ tree code and related operations include or are inspired by code from the xgboost library, see inst/COPYRIGHTS) [copyright holder]
+  \item treelite contributors (C++ tree code and related operations include or are inspired by code from the treelite library, see inst/COPYRIGHTS) [copyright holder]
+  \item Microsoft Corporation (C++ I/O and various project structure code include or are inspired by code from the LightGBM library, which is a copyright of Microsoft, see inst/COPYRIGHTS) [copyright holder]
+  \item Niels Lohmann (C++ source uses the JSON for Modern C++ library for JSON operations, see inst/COPYRIGHTS) [copyright holder]
+  \item Daniel Lemire (C++ source uses the fast_double_parser library internally, see inst/COPYRIGHTS) [copyright holder]
+  \item Victor Zverovich (C++ source uses the fmt library internally, see inst/COPYRIGHTS) [copyright holder]
 }
 
 }

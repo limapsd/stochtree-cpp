@@ -10,6 +10,8 @@ Wrapper around a C++ tree ensemble
 \if{html}{\out{<div class="r6-fields">}}
 \describe{
 \item{\code{forest_ptr}}{External pointer to a C++ TreeEnsemble class}
+
+\item{\code{internal_forest_is_empty}}{Whether the forest has not yet been "initialized" such that its \code{predict} function can be called.}
 }
 \if{html}{\out{</div>}}
 }
@@ -17,13 +19,16 @@ Wrapper around a C++ tree ensemble
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-Forest-new}{\code{Forest$new()}}
+\item \href{#method-Forest-merge_forest}{\code{Forest$merge_forest()}}
+\item \href{#method-Forest-add_constant}{\code{Forest$add_constant()}}
+\item \href{#method-Forest-multiply_constant}{\code{Forest$multiply_constant()}}
 \item \href{#method-Forest-predict}{\code{Forest$predict()}}
 \item \href{#method-Forest-predict_raw}{\code{Forest$predict_raw()}}
 \item \href{#method-Forest-set_root_leaves}{\code{Forest$set_root_leaves()}}
 \item \href{#method-Forest-prepare_for_sampler}{\code{Forest$prepare_for_sampler()}}
 \item \href{#method-Forest-adjust_residual}{\code{Forest$adjust_residual()}}
 \item \href{#method-Forest-num_trees}{\code{Forest$num_trees()}}
-\item \href{#method-Forest-output_dimension}{\code{Forest$output_dimension()}}
+\item \href{#method-Forest-leaf_dimension}{\code{Forest$leaf_dimension()}}
 \item \href{#method-Forest-is_constant_leaf}{\code{Forest$is_constant_leaf()}}
 \item \href{#method-Forest-is_exponentiated}{\code{Forest$is_exponentiated()}}
 \item \href{#method-Forest-add_numeric_split_tree}{\code{Forest$add_numeric_split_tree()}}
@@ -32,6 +37,7 @@ Wrapper around a C++ tree ensemble
 \item \href{#method-Forest-get_forest_split_counts}{\code{Forest$get_forest_split_counts()}}
 \item \href{#method-Forest-tree_max_depth}{\code{Forest$tree_max_depth()}}
 \item \href{#method-Forest-average_max_depth}{\code{Forest$average_max_depth()}}
+\item \href{#method-Forest-is_empty}{\code{Forest$is_empty()}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -42,9 +48,9 @@ Create a new Forest object.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{Forest$new(
   num_trees,
-  output_dimension = 1,
-  is_leaf_constant = F,
-  is_exponentiated = F
+  leaf_dimension = 1,
+  is_leaf_constant = FALSE,
+  is_exponentiated = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -53,7 +59,7 @@ Create a new Forest object.
 \describe{
 \item{\code{num_trees}}{Number of trees in the forest}
 
-\item{\code{output_dimension}}{Dimensionality of the outcome model}
+\item{\code{leaf_dimension}}{Dimensionality of the outcome model}
 
 \item{\code{is_leaf_constant}}{Whether leaf is constant}
 
@@ -63,6 +69,57 @@ Create a new Forest object.
 }
 \subsection{Returns}{
 A new \code{Forest} object.
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Forest-merge_forest"></a>}}
+\if{latex}{\out{\hypertarget{method-Forest-merge_forest}{}}}
+\subsection{Method \code{merge_forest()}}{
+Create a larger forest by merging the trees of this forest with those of another forest
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Forest$merge_forest(forest)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{forest}}{Forest to be merged into this forest}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Forest-add_constant"></a>}}
+\if{latex}{\out{\hypertarget{method-Forest-add_constant}{}}}
+\subsection{Method \code{add_constant()}}{
+Add a constant value to every leaf of every tree in an ensemble. If leaves are multi-dimensional, \code{constant_value} will be added to every dimension of the leaves.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Forest$add_constant(constant_value)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{constant_value}}{Value that will be added to every leaf of every tree}
+}
+\if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Forest-multiply_constant"></a>}}
+\if{latex}{\out{\hypertarget{method-Forest-multiply_constant}{}}}
+\subsection{Method \code{multiply_constant()}}{
+Multiply every leaf of every tree by a constant value. If leaves are multi-dimensional, \code{constant_multiple} will be multiplied through every dimension of the leaves.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Forest$multiply_constant(constant_multiple)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{constant_multiple}}{Value that will be multiplied by every leaf of every tree}
+}
+\if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -203,12 +260,12 @@ Tree count
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-Forest-output_dimension"></a>}}
-\if{latex}{\out{\hypertarget{method-Forest-output_dimension}{}}}
-\subsection{Method \code{output_dimension()}}{
+\if{html}{\out{<a id="method-Forest-leaf_dimension"></a>}}
+\if{latex}{\out{\hypertarget{method-Forest-leaf_dimension}{}}}
+\subsection{Method \code{leaf_dimension()}}{
 Return output dimension of trees in a \code{Forest} object
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{Forest$output_dimension()}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{Forest$leaf_dimension()}\if{html}{\out{</div>}}
 }
 
 \subsection{Returns}{
@@ -225,7 +282,7 @@ Return constant leaf status of trees in a \code{Forest} object
 }
 
 \subsection{Returns}{
-\code{T} if leaves are constant, \code{F} otherwise
+\code{TRUE} if leaves are constant, \code{FALSE} otherwise
 }
 }
 \if{html}{\out{<hr>}}
@@ -238,7 +295,7 @@ Return exponentiation status of trees in a \code{Forest} object
 }
 
 \subsection{Returns}{
-\code{T} if leaf predictions must be exponentiated, \code{F} otherwise
+\code{TRUE} if leaf predictions must be exponentiated, \code{FALSE} otherwise
 }
 }
 \if{html}{\out{<hr>}}
@@ -359,6 +416,29 @@ Average the maximum depth of each tree in the forest
 
 \subsection{Returns}{
 Average maximum depth
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-Forest-is_empty"></a>}}
+\if{latex}{\out{\hypertarget{method-Forest-is_empty}{}}}
+\subsection{Method \code{is_empty()}}{
+When a forest object is created, it is "empty" in the sense that none
+of its component trees have leaves with values. There are two ways to
+"initialize" a Forest object. First, the \code{set_root_leaves()} method
+simply initializes every tree in the forest to a single node carrying
+the same (user-specified) leaf value. Second, the \code{prepare_for_sampler()}
+method initializes every tree in the forest to a single node with the
+same value and also propagates this information through to a ForestModel
+object, which must be synchronized with a Forest during a forest
+sampler loop.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{Forest$is_empty()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+\code{TRUE} if a Forest has not yet been initialized with a constant
+root value, \code{FALSE} otherwise if the forest has already been
+initialized / grown.
 }
 }
 }

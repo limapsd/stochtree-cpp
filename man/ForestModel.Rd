@@ -22,8 +22,17 @@ trees, and exposes functionality to run a forest sampler
 \itemize{
 \item \href{#method-ForestModel-new}{\code{ForestModel$new()}}
 \item \href{#method-ForestModel-sample_one_iteration}{\code{ForestModel$sample_one_iteration()}}
+\item \href{#method-ForestModel-get_cached_forest_predictions}{\code{ForestModel$get_cached_forest_predictions()}}
 \item \href{#method-ForestModel-propagate_basis_update}{\code{ForestModel$propagate_basis_update()}}
 \item \href{#method-ForestModel-propagate_residual_update}{\code{ForestModel$propagate_residual_update()}}
+\item \href{#method-ForestModel-update_alpha}{\code{ForestModel$update_alpha()}}
+\item \href{#method-ForestModel-update_beta}{\code{ForestModel$update_beta()}}
+\item \href{#method-ForestModel-update_min_samples_leaf}{\code{ForestModel$update_min_samples_leaf()}}
+\item \href{#method-ForestModel-update_max_depth}{\code{ForestModel$update_max_depth()}}
+\item \href{#method-ForestModel-get_alpha}{\code{ForestModel$get_alpha()}}
+\item \href{#method-ForestModel-get_beta}{\code{ForestModel$get_beta()}}
+\item \href{#method-ForestModel-get_min_samples_leaf}{\code{ForestModel$get_min_samples_leaf()}}
+\item \href{#method-ForestModel-get_max_depth}{\code{ForestModel$get_max_depth()}}
 }
 }
 \if{html}{\out{<hr>}}
@@ -81,17 +90,11 @@ Run a single iteration of the forest sampling algorithm (MCMC or GFR)
   forest_samples,
   active_forest,
   rng,
-  feature_types,
-  leaf_model_int,
-  leaf_model_scale,
-  variable_weights,
-  a_forest,
-  b_forest,
-  global_scale,
-  cutpoint_grid_size = 500,
-  keep_forest = T,
-  gfr = T,
-  pre_initialized = F
+  forest_model_config,
+  global_model_config,
+  num_threads = -1,
+  keep_forest = TRUE,
+  gfr = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -108,29 +111,30 @@ Run a single iteration of the forest sampling algorithm (MCMC or GFR)
 
 \item{\code{rng}}{Wrapper around C++ random number generator}
 
-\item{\code{feature_types}}{Vector specifying the type of all p covariates in \code{forest_dataset} (0 = numeric, 1 = ordered categorical, 2 = unordered categorical)}
+\item{\code{forest_model_config}}{ForestModelConfig object containing forest model parameters and settings}
 
-\item{\code{leaf_model_int}}{Integer specifying the leaf model type (0 = constant leaf, 1 = univariate leaf regression, 2 = multivariate leaf regression)}
+\item{\code{global_model_config}}{GlobalModelConfig object containing global model parameters and settings}
 
-\item{\code{leaf_model_scale}}{Scale parameter used in the leaf node model (should be a q x q matrix where q is the dimensionality of the basis and is only >1 when \code{leaf_model_int = 2})}
+\item{\code{num_threads}}{Number of threads to use in the GFR and MCMC algorithms, as well as prediction. If OpenMP is not available on a user's system, this will default to \code{1}, otherwise to the maximum number of available threads.}
 
-\item{\code{variable_weights}}{Vector specifying sampling probability for all p covariates in \code{forest_dataset}}
+\item{\code{keep_forest}}{(Optional) Whether the updated forest sample should be saved to \code{forest_samples}. Default: \code{TRUE}.}
 
-\item{\code{a_forest}}{Shape parameter on variance forest model (if applicable)}
-
-\item{\code{b_forest}}{Scale parameter on variance forest model (if applicable)}
-
-\item{\code{global_scale}}{Global variance parameter}
-
-\item{\code{cutpoint_grid_size}}{(Optional) Number of unique cutpoints to consider (default: \code{500}, currently only used when \code{GFR = TRUE})}
-
-\item{\code{keep_forest}}{(Optional) Whether the updated forest sample should be saved to \code{forest_samples}. Default: \code{T}.}
-
-\item{\code{gfr}}{(Optional) Whether or not the forest should be sampled using the "grow-from-root" (GFR) algorithm. Default: \code{T}.}
-
-\item{\code{pre_initialized}}{(Optional) Whether or not the leaves are pre-initialized outside of the sampling loop (before any samples are drawn). In multi-forest implementations like BCF, this is true, though in the single-forest supervised learning implementation, we can let C++ do the initialization. Default: \code{F}.}
+\item{\code{gfr}}{(Optional) Whether or not the forest should be sampled using the "grow-from-root" (GFR) algorithm. Default: \code{TRUE}.}
 }
 \if{html}{\out{</div>}}
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-get_cached_forest_predictions"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-get_cached_forest_predictions}{}}}
+\subsection{Method \code{get_cached_forest_predictions()}}{
+Extract an internally-cached prediction of a forest on the training dataset in a sampler.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$get_cached_forest_predictions()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Vector with as many elements as observations in the training dataset
 }
 }
 \if{html}{\out{<hr>}}
@@ -179,7 +183,139 @@ This function is run after the \code{Outcome} class's \code{update_data} method,
 \if{html}{\out{</div>}}
 }
 \subsection{Returns}{
-NULL
+None
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-update_alpha"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-update_alpha}{}}}
+\subsection{Method \code{update_alpha()}}{
+Update alpha in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$update_alpha(alpha)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{alpha}}{New value of alpha to be used}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-update_beta"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-update_beta}{}}}
+\subsection{Method \code{update_beta()}}{
+Update beta in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$update_beta(beta)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{beta}}{New value of beta to be used}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-update_min_samples_leaf"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-update_min_samples_leaf}{}}}
+\subsection{Method \code{update_min_samples_leaf()}}{
+Update min_samples_leaf in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$update_min_samples_leaf(min_samples_leaf)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{min_samples_leaf}}{New value of min_samples_leaf to be used}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-update_max_depth"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-update_max_depth}{}}}
+\subsection{Method \code{update_max_depth()}}{
+Update max_depth in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$update_max_depth(max_depth)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{max_depth}}{New value of max_depth to be used}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+None
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-get_alpha"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-get_alpha}{}}}
+\subsection{Method \code{get_alpha()}}{
+Update alpha in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$get_alpha()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Value of alpha in the tree prior
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-get_beta"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-get_beta}{}}}
+\subsection{Method \code{get_beta()}}{
+Update beta in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$get_beta()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Value of beta in the tree prior
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-get_min_samples_leaf"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-get_min_samples_leaf}{}}}
+\subsection{Method \code{get_min_samples_leaf()}}{
+Query min_samples_leaf in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$get_min_samples_leaf()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Value of min_samples_leaf in the tree prior
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ForestModel-get_max_depth"></a>}}
+\if{latex}{\out{\hypertarget{method-ForestModel-get_max_depth}{}}}
+\subsection{Method \code{get_max_depth()}}{
+Query max_depth in the tree prior
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{ForestModel$get_max_depth()}\if{html}{\out{</div>}}
+}
+
+\subsection{Returns}{
+Value of max_depth in the tree prior
 }
 }
 }

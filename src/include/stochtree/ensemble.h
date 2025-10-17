@@ -14,18 +14,30 @@
 #include <stochtree/tree.h>
 #include <nlohmann/json.hpp>
 
-#include <algorithm>
-#include <deque>
-#include <optional>
-#include <random>
-#include <unordered_map>
-
 using json = nlohmann::json;
 
 namespace StochTree {
 
+/*!
+ * \defgroup forest_group Forest API
+ *
+ * \brief Classes / functions for creating and modifying forests (i.e. ensembles of trees).
+ *
+ * \{
+ */
+
+/*! \brief Class storing a "forest," or an ensemble of decision trees.
+ */
 class TreeEnsemble {
  public:
+  /*!
+   * \brief Initialize a new TreeEnsemble
+   * 
+   * \param num_trees Number of trees in a forest
+   * \param output_dimension Dimension of the leaf node parameter
+   * \param is_leaf_constant Whether or not the leaves of each tree are treated as "constant." If true, then predicting from an ensemble is simply a matter or determining which leaf node an observation falls into. If false, prediction will multiply a leaf node's parameter(s) for a given observation by a basis vector.
+   * \param is_exponentiated Whether or not the leaves of each tree are stored in log scale. If true, leaf predictions are exponentiated before their prediction is returned.
+   */
   TreeEnsemble(int num_trees, int output_dimension = 1, bool is_leaf_constant = true, bool is_exponentiated = false) {
     // Initialize trees in the ensemble
     trees_ = std::vector<std::unique_ptr<Tree>>(num_trees);
@@ -39,6 +51,12 @@ class TreeEnsemble {
     is_leaf_constant_ = is_leaf_constant;
     is_exponentiated_ = is_exponentiated;
   }
+  
+  /*!
+   * \brief Initialize an ensemble based on the state of an existing ensemble
+   * 
+   * \param ensemble `TreeEnsemble` used to initialize the current ensemble
+   */
   TreeEnsemble(TreeEnsemble& ensemble) {
     // Unpack ensemble configurations
     num_trees_ = ensemble.num_trees_;
@@ -56,31 +74,112 @@ class TreeEnsemble {
       this->CloneFromExistingTree(j, tree);
     }
   }
+  
   ~TreeEnsemble() {}
 
+  /*!
+   * \brief Combine two forests into a single forest by merging their trees
+   * 
+   * \param ensemble Reference to another `TreeEnsemble` that will be merged into the current ensemble
+   */
+  void MergeForest(TreeEnsemble& ensemble) {
+    // Unpack ensemble configurations
+    int old_num_trees = num_trees_;
+    num_trees_ += ensemble.num_trees_;
+    CHECK_EQ(output_dimension_, ensemble.output_dimension_);
+    CHECK_EQ(is_leaf_constant_, ensemble.is_leaf_constant_);
+    CHECK_EQ(is_exponentiated_, ensemble.is_exponentiated_);
+    // Resize tree vector and reset new trees
+    trees_.resize(num_trees_);
+    for (int i = old_num_trees; i < num_trees_; i++) {
+      trees_[i].reset(new Tree());
+    }
+    // Clone trees in the input ensemble
+    for (int j = 0; j < ensemble.num_trees_; j++) {
+      Tree* tree = ensemble.GetTree(j);
+      this->CloneFromExistingTree(old_num_trees + j, tree);
+    }
+  }
+
+  /*!
+   * \brief Add a constant value to every leaf of every tree in an ensemble. If leaves are multi-dimensional, `constant_value` will be added to every dimension of the leaves.
+   * 
+   * \param constant_value Value that will be added to every leaf of every tree
+   */
+  void AddValueToLeaves(double constant_value) {
+    for (int j = 0; j < num_trees_; j++) {
+      Tree* tree = GetTree(j);
+      tree->AddValueToLeaves(constant_value);
+    }
+  }
+
+  /*!
+   * \brief Multiply every leaf of every tree by a constant value. If leaves are multi-dimensional, `constant_multiple` will be multiplied through every dimension of the leaves.
+   * 
+   * \param constant_multiple Value that will be multiplied by every leaf of every tree
+   */
+  void MultiplyLeavesByValue(double constant_multiple) {
+    for (int j = 0; j < num_trees_; j++) {
+      Tree* tree = GetTree(j);
+      tree->MultiplyLeavesByValue(constant_multiple);
+    }
+  }
+
+  /*!
+   * \brief Return a pointer to a tree in the forest
+   * 
+   * \param i Index (0-based) of a tree to be queried
+   * \return Tree* 
+   */
   inline Tree* GetTree(int i) {
     return trees_[i].get();
   }
 
+  /*!
+   * \brief Reset a `TreeEnsemble` to all single-node "root" trees
+   */
   inline void ResetRoot() {
     for (int i = 0; i < num_trees_; i++) {
       ResetInitTree(i);
     }
   }
 
+  /*!
+   * \brief Reset a single tree in an ensemble
+   * \todo Consider refactoring this and `ResetInitTree`
+   * 
+   * \param i Index (0-based) of the tree to be reset
+   */
   inline void ResetTree(int i) {
     trees_[i].reset(new Tree());
   }
 
+  /*!
+   * \brief Reset a single tree in an ensemble
+   * \todo Consider refactoring this and `ResetTree`
+   * 
+   * \param i Index (0-based) of the tree to be reset
+   */
   inline void ResetInitTree(int i) {
     trees_[i].reset(new Tree());
     trees_[i]->Init(output_dimension_, is_exponentiated_);
   }
 
+  /*!
+   * \brief Clone a single tree in an ensemble from an existing tree, overwriting current tree
+   * 
+   * \param i Index of the tree to be overwritten
+   * \param tree Pointer to tree used to clone tree `i`
+   */
   inline void CloneFromExistingTree(int i, Tree* tree) {
     return trees_[i]->CloneFromTree(tree);
   }
 
+  /*!
+   * \brief Reset an ensemble to clone another ensemble
+   * 
+   * \param ensemble Reference to an existing `TreeEnsemble`
+   */
   inline void ReconstituteFromForest(TreeEnsemble& ensemble) {
     // Delete old tree pointers
     trees_.clear();
@@ -461,6 +560,8 @@ class TreeEnsemble {
   bool is_leaf_constant_;
   bool is_exponentiated_;
 };
+
+/*! \} */ // end of forest_group
 
 } // namespace StochTree
 
