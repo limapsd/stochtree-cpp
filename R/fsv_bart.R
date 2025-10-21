@@ -470,10 +470,10 @@ if (SV){
     
     resid <- Y_train - Y_fit_BART
 
-    Ft <-  get_factors(resid,S=exp(H),H=exp(Omega),L=Lambda,q=Q,t=TT)
+    Ft <-  get_factors(resid,S=H,H=exp(Omega),L=Lambda,q=Q,t=TT)
     id.L <- FALSE # whether factor model for the errors should be identified
     if(!id.L) Ft <- apply(Ft, 2, function(x) (x-mean(x))/sd(x)) # normalize factor draw
-    Lambda <- get_Lambda(resid, fac = Ft, S = exp(H), pr= theta_Lambda , m=M, q=Q, id.fac=!id_Lambda[1,Q])
+    Lambda <- get_Lambda(resid, fac = Ft, S = H, pr= theta_Lambda , m=M, q=Q, id.fac=!id_Lambda[1,Q])
     
     ###------------------- Step 3.2: Sample HS hyperparameters ------------------###
     
@@ -551,9 +551,9 @@ if (SV){
               mean_forecast[mm] <- active_forest_sample_mean$predict_raw(forest_dataset)
             }
             if(SV){
-              h_fore <- log(as.numeric(sigma_mat)^2) + (sv_params_mat[, 1] + sv_params_mat[ , 2] * (HT - sv_params_mat[,1]) + sv_params_mat[ , 3]*rnorm(M))
-              O_fore <- (fsv_params_mat[, 1] + fsv_params_mat[ , 2] * (OT - fsv_params_mat[,1]) + fsv_params_mat[ , 3]*rnorm(Q))
-              Sigma_fore <- Lambda %*% diag(exp(O_fore)) %*% t(Lambda) + diag(exp(h_fore))
+              HT <- log(as.numeric(sigma_mat)^2) + (sv_params_mat[, 1] + sv_params_mat[ , 2] * (HT - sv_params_mat[,1]) + sv_params_mat[ , 3]*rnorm(M))
+              OT <- (fsv_params_mat[, 1] + fsv_params_mat[ , 2] * (OT - fsv_params_mat[,1]) + fsv_params_mat[ , 3]*rnorm(Q))
+              Sigma_fore <- Lambda %*% diag(exp(OT)) %*% t(Lambda) + diag(exp(HT))
             }else{
               h_fore    <- HT
               Sigma_fore <- diag(exp(h_fore))
