@@ -692,6 +692,18 @@ sample_without_replacement_integer_cpp <- function(population_vector, sampling_p
   .Call(`_stochtree_sample_without_replacement_integer_cpp`, population_vector, sampling_probs, sample_size)
 }
 
+sample_dart_splits_one_iteration_cpp <- function(variable_count_splits, alpha, rng) {
+  .Call(`_stochtree_sample_dart_splits_one_iteration_cpp`, variable_count_splits, alpha, rng)
+}
+
+sample_alpha_one_iteration_cpp <- function(log_prob_vector, a, b, rho, rng) {
+  .Call(`_stochtree_sample_alpha_one_iteration_cpp`, log_prob_vector, a, b, rho, rng)
+}
+
+sample_minnesota_dart_one_iteration_cpp <- function(phi, rng) {
+  .Call(`_stochtree_sample_minnesota_dart_one_iteration_cpp`, phi, rng)
+}
+
 init_json_cpp <- function() {
   .Call(`_stochtree_init_json_cpp`)
 }
