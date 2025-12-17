@@ -264,6 +264,7 @@ bart_cgm <- function(
   sigma2_leaf_samples   <- rep(0, num_saved)
   sigma2_samples   <- rep(0, num_saved)
   var_count_matrix <- matrix(NA, nrow = num_saved, ncol = ncol(X_train))
+  var_prob_matrix  <- matrix(NA, nrow = num_saved, ncol = ncol(X_train))
   y_hat_store      <- matrix(NA, nrow = num_saved, ncol = nrow(X_train))
   if (SV) sigt_store <- matrix(NA, nrow = num_saved, ncol = nrow(X_train))
   
@@ -336,6 +337,8 @@ bart_cgm <- function(
         if(mean_prior == "dart"){
             draw_dart <- sample_dart_splits_one_iteration(variable_count_splits, alpha_dart, rng)
             log_prob_vector <- draw_dart$lpv
+            variable_prob_splits <- exp(log_prob_vector)
+            
             
             alpha_sampler <- sample_alpha_one_iteration(log_prob_vector, a_dart, b_dart, rho_dart, rng)
             alpha_dart    <- alpha_sampler$alpha
@@ -352,6 +355,7 @@ bart_cgm <- function(
       sigma2_samples[idx] <- current_sigma2 * (y_std_train ^ 2)
       sigma2_leaf_samples[idx] <- current_leaf_scale
       var_count_matrix[idx, ] <- variable_count_splits
+      if(mean_prior =="dart") var_prob_matrix[idx,] <- variable_prob_splits
       if (SV) {
         sigt_store[idx, ] <- exp(h_t/2) * (y_std_train)
         sv_params_mcmc[idx, ] <- unlist(sv_params[c("mu","phi","sigma")])
@@ -401,6 +405,7 @@ bart_cgm <- function(
   }
   result[["sigma2_leaf_draws"]] <- sigma2_leaf_samples
   result[["var_count_matrix"]] <- var_count_matrix
+  result[["var_prob_matrix"]] <- var_prob_matrix
   class(result) <- "bartmodel"
   
   rm(forest_model_mean); rm(forest_dataset_train); rm(outcome_train); rm(rng)
