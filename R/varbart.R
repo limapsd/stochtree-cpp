@@ -35,7 +35,7 @@ varbart <- function(
     general_params = list(),
     mean_forest_params = list()
 ) {
-  
+    
     ###--------------------------------------------------------------------------###
     ###-------------------- Preprocessing the VAR objects  ----------------------###
     ###--------------------------------------------------------------------------###
@@ -257,16 +257,16 @@ varbart <- function(
     }
 
     if(mean_prior == "sparse"){
-        a_dart <- mean_forest_params_updated$a_dart
-        b_dart <- mean_forest_params_updated$b_dart
+        a_dart <- general_params_updated$a_dart
+        b_dart <- general_params_updated$b_dart
         
         alpha_dart <-1.
         rho_dart <- ncol(X_train)
     }
 
     if (mean_prior == "minnesota"){
-        lambda_1 <- mean_forest_params_updated$lambda_1
-        lambda_2 <- mean_forest_params_updated$lambda_2
+        lambda_1 <- general_params_updated$lambda_1
+        lambda_2 <- general_params_updated$lambda_2
         lag_index <- matrix(0,M,p) # For the minessota prior.  
         
         for(i in 1:M){
@@ -738,21 +738,24 @@ varbart <- function(
 
             if (i > floor(num_burnin / 2)) {
                 if(mean_prior == "sparse"){
-            
+                    
                     draw_dart <- sample_dart_splits_one_iteration(variable_count_splits, alpha_dart, rng)
                     log_prob_vector <- draw_dart$lpv
                     variable_prob_splits <- exp(log_prob_vector)
 
                     alpha_sampler <- sample_alpha_one_iteration(log_prob_vector, a_dart, b_dart, rho_dart, rng)
                     alpha_dart    <- alpha_sampler$alpha
-            
+
+                    #Updating variable weights
+                    forest_model_config_mean_ls[[mm]]$update_variable_weights(variable_prob_splits)
                 }
                 if(mean_prior == "minnesota"){
                     log_probability_spits <- draw_minessota_split(variable_count_splits, mm,lag_index ,diag(sigma2hat),lambda_1, lambda_2, rng)
                     variable_prob_splits      <- exp(log_probability_spits)
+                    #Updating variable weights
+                    forest_model_config_mean_ls[[mm]]$update_variable_weights(variable_prob_splits)
                 }
-                #Updating variable weights
-                forest_model_config_mean_ls[[mm]]$update_variable_weights(variable_prob_splits)
+                
             }
             #Updating
             forest_model_mean_ls[[mm]] <- forest_model_mean
@@ -834,14 +837,12 @@ varbart <- function(
             
             if(variance_prior == "fsv"){
                 shocks = Y_train - tcrossprod(Ft, Lambda) - Y_fit_BART
-            }else if(variance_prior == "csv"){
+            }else{
                 eta <- Y_train - Y_fit_BART
                 shocks <- eta
                 for (m in 2:M) {
                     shocks[, m] <- as.numeric(eta[, m] + eta[, 1:(m-1), drop = FALSE] %*% matrix(A[m, 1:(m-1)], ncol = 1))
                 }
-            }else{
-                shocks = Y_train - Y_fit_BART
             }
             for (mm in 1:M) {
                 svdraw_mm = stochvol::svsample_general_cpp(
