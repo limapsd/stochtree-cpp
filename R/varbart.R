@@ -32,6 +32,7 @@ varbart <- function(
     num_burnin = 100L,
     num_mcmc = 100L,
     num_thin = 1L,
+    return_forests = FALSE,
     general_params = list(),
     mean_forest_params = list()
 ) {
@@ -121,7 +122,7 @@ varbart <- function(
       resid_mle <- Y_train - y_hat_mle
       sigma2hat <- (t(resid_mle) %*% (resid_mle)) / TT
     } else {
-      beta_ols <- solve(XtX) %*% XtY
+      beta_ols <- MASS::ginv(XtX) %*% XtY
       y_hat_mle <- X_train %*% beta_ols
       resid_mle <- Y_train - X_train %*% beta_ols
       sigma2hat <- (t(resid_mle) %*% (resid_mle)) / TT
@@ -782,15 +783,38 @@ varbart <- function(
             X <- (-eta[, 1:(m-1), drop = FALSE]) * w    # TT x (m-1)
             y <- eta[, m] * w                            # TT
 
-            # prior variances for this row's coefficients
+            # prior variances for this row's coefficients.
+            # NOTE: tau_A and lambda_A store the SQUARED scales (tau^2, lambda^2)
+            # from sample_hs; their product is the prior variance.
             if (cov_shrinkage == "hs") {
-              theta_A[m, 1:(m-1)] <- (tau_A[m]^2) * (lambda_A[m, 1:(m-1)]^2)
+              theta_A[m, 1:(m-1)] <- tau_A[m] * lambda_A[m, 1:(m-1)]
             }
             V0 <- as.numeric(theta_A[m, 1:(m-1), drop = TRUE])
 
             S <- crossprod(X)
             diag(S) <- diag(S) + 1 / V0
-            R <- tryCatch(chol(S), error = function(e) chol(S + diag(1e-8, ncol(X))))
+            R <- tryCatch(
+              chol(S),
+              error = function(e) {
+                if (any(!is.finite(S))) {
+                  stop(sprintf(
+                    "Non-finite values in S at m=%d. Check V0 (theta_A) and weights w.",
+                    m
+                  ))
+                }
+                for (jit in c(1e-8, 1e-6, 1e-4, 1e-2, 1)) {
+                  R_try <- tryCatch(
+                    chol(S + diag(jit, ncol(X))),
+                    error = function(e) NULL
+                  )
+                  if (!is.null(R_try)) return(R_try)
+                }
+                stop(sprintf(
+                  "chol(S) fails even with jitter=1 at m=%d; S may be severely ill-conditioned.",
+                  m
+                ))
+              }
+            )
 
             b <- crossprod(X, y)
             mu <- backsolve(R, forwardsolve(t(R), b))
@@ -811,7 +835,7 @@ varbart <- function(
               nu_A[m, 1:(m-1)]     <- hs$nu
               tau_A[m]             <- hs$tau
               zeta_A[m]            <- hs$zeta
-              theta_A[m, 1:(m-1)]  <- (tau_A[m]^2) * (lambda_A[m, 1:(m-1)]^2)
+              theta_A[m, 1:(m-1)]  <- hs$psi   # psi = lambda * tau = prior variance
             } else if (cov_shrinkage == "ng") {
               upd <- sample_ng_col(
                 facloads_j = as.numeric(A[m, 1:(m-1)]),
@@ -1202,6 +1226,9 @@ varbart <- function(
     
     result[["y_hat_train"]] = y_hat_store
     
+    if (variance_prior == "const") {
+        result[["sigma_store"]] = sigma_store
+    }
     if (variance_prior == "fsv") {
         result[["Lambda_store"]] = Lambda_store
         result[["Factor_store"]] = Factor_store
@@ -1249,10 +1276,20 @@ varbart <- function(
     
     class(result) <- "varbart"
     
+    if (return_forests) {
+        # Retain the saved forest ensembles for downstream structural analysis
+        # (e.g. GIRF). The training dataset and model configs are not needed
+        # for prediction at new points — a fresh stochtree::createForestDataset
+        # on a new x suffices, combined with train_set_metadata.
+        result[["forest_samples_mean_ls"]] <- forest_samples_mean_ls
+    }
+    
     rm(forest_dataset_train_ls)
     rm(forest_model_config_mean_ls)
     rm(active_forest_mean_ls)
-    rm(forest_samples_mean_ls)
+    if (!return_forests) {
+        rm(forest_samples_mean_ls)
+    }
     rm(global_model_config_ls)
     rm(forest_model_mean_ls)
     rm(rng)

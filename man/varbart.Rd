@@ -17,6 +17,7 @@ varbart(
   num_burnin = 100L,
   num_mcmc = 100L,
   num_thin = 1L,
+  return_forests = FALSE,
   general_params = list(),
   mean_forest_params = list()
 )
