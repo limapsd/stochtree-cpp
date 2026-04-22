@@ -1,8 +1,91 @@
+# stochtree 0.4.1.9000
+
+## New Features
+
+* Added support for parametric treatment effect term in BCF [#309](https://github.com/StochasticTree/stochtree/pull/309/)
+* Added support for observation-level weights passed as data arguments to BART and BCF [#333](https://github.com/StochasticTree/stochtree/pull/333)
+
+## Bug Fixes
+
+* Fixed prediction bug for cloglog BART in R [#361](https://github.com/StochasticTree/stochtree/pull/361)
+* Fixed assignment bug in RFX category tracker data structure [#360](https://github.com/StochasticTree/stochtree/pull/360)
+* Fixed prediction bugs in binary classification sklearn wrapper [#359](https://github.com/StochasticTree/stochtree/pull/359)
+* Fixed several initialization, sampling and prediction bugs for cloglog [#357](https://github.com/StochasticTree/stochtree/pull/357)
+* Fixed num_threads pass-through bug in R BART [#339](https://github.com/StochasticTree/stochtree/pull/339)
+* Fixed probit offset bug in R and Python [#337](https://github.com/StochasticTree/stochtree/pull/337)
+* Standardized multi-chain BCF handling of internal propensity models [#334](https://github.com/StochasticTree/stochtree/pull/334)
+* Fixed multi-chain BCF bugs with the parametric intercept term in R and Python [#326](https://github.com/StochasticTree/stochtree/pull/326)
+* Fixed indexing bugs for multivariate treatment BCF in Python [#326](https://github.com/StochasticTree/stochtree/pull/326)
+* Convert binary factor-valued treatments to 0/1 binary numeric treatment in `bcf()` R function [#332](https://github.com/StochasticTree/stochtree/pull/332)
+
+## Documentation and Other Maintenance
+
+# stochtree 0.4.1
+
+## New Features
+
+## Bug Fixes
+
+## Documentation and Other Maintenance
+
+* Converted all R man page titles to title case [#310](https://github.com/StochasticTree/stochtree/pull/310)
+
+# stochtree 0.4.0
+
+## New Features
+
+* Added support for ordinal outcome modeling through complementary log-log link function in the BART models ([#196](https://github.com/StochasticTree/stochtree/pull/196))
+* Added `__str__`, `__repr__`, `summary`, and `extract_parameter` methods in Python for the `BARTModel` and `BCFModel` classes ([#298](https://github.com/StochasticTree/stochtree/pull/298))
+* Added plotting utility function (`plot_parameter_trace`) in Python that operates on both the `BARTModel` and `BCFModel` classes ([#298](https://github.com/StochasticTree/stochtree/pull/298))
+* Added vignettes for summary / model inspection utilities in both R and Python ([#298](https://github.com/StochasticTree/stochtree/pull/298))
+* Added `print` methods in R and `__str__` methods in Python for the forest container and random effects container objects ([#298](https://github.com/StochasticTree/stochtree/pull/298))
+* Updated R documentation to group related functions into topics ([#302](https://github.com/StochasticTree/stochtree/pull/302)):
+  * `BARTSerialization`
+  * `BCFSerialization`
+  * `ForestSamplesSerialization`
+  * `RandomEffectSamplesSerialization`
+  * `DataPreprocessing`
+  * `ForestKernelComputation`
+  * `ForestStateManagement`
+  * `RandomEffectStateManagement`
+* Converted the following R function names from snake case to camel case ([#302](https://github.com/StochasticTree/stochtree/pull/302)):
+  * `compute_bart_posterior_interval` -> `computeBARTPosteriorInterval`
+  * `compute_bcf_posterior_interval` -> `computeBCFPosteriorInterval`
+  * `compute_contrast_bart_model` -> `computeContrastBARTModel`
+  * `compute_contrast_bcf_model` -> `computeContrastBCFModel`
+  * `extract_parameter` -> `extractParameter`
+  * `sample_bart_posterior_predictive` -> `sampleBARTPosteriorPredictive`
+  * `sample_bcf_posterior_predictive` -> `sampleBCFPosteriorPredictive`
+
+## Bug Fixes
+
+* Fixed status logging bugs for multi-chain R MCMC loops ([#298](https://github.com/StochasticTree/stochtree/pull/298))
+
+# stochtree 0.3.1
+
+## New Features
+
+* Replaced C++ standard library distributions (`discrete_distribution`, `uniform_real_distribution`, `normal_distribution`, and `gamma_distribution`) with custom implementations for cross-platform reproducibility.
+* Substituted custom implementations for base R `mean()`, `var()`, and `sd()` in the preprocessing logic of the R `bart()` and `bcf()` functions for enhanced numeric stability across platforms.
+
+# stochtree 0.3.0
+
+## New Features
+
+* Added `print`, `summary`, `plot`, and `extract_parameter` generic functions in R for the `bartmodel` and `bcfmodel` classes ([#271](https://github.com/StochasticTree/stochtree/pull/271))
+
+## Bug Fixes
+
+* Fix R bug where our approach to temporarily modifying users' RNG state failed if `.Random.seed` did not exist (i.e. if the R RNG hadn't yet been accessed by an R session) ([#258](https://github.com/StochasticTree/stochtree/issues/258))
+* Fix prediction bug for R BART models with random effects with labels that aren't straightforward `1:num_groups` integers when only `y_hat` is requested ([#256](https://github.com/StochasticTree/stochtree/pull/256))
+* Fix issue with C++ standard specification in Windows R package config ([#276](https://github.com/StochasticTree/stochtree/pull/276))
+
 # stochtree 0.2.1
 
 ## Bug Fixes
 
 * Fix prediction bug for univariate random effects models in R ([#248](https://github.com/StochasticTree/stochtree/pull/248))
+* Fix prediction bug for Python BART and BCF models with random effects with labels that aren't straightforward `0:(num_groups-1)` integers ([#256](https://github.com/StochasticTree/stochtree/pull/256))
 
 ## Other Changes
 

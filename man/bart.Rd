@@ -2,7 +2,7 @@
 % Please edit documentation in R/bart.R
 \name{bart}
 \alias{bart}
-\title{Run the BART algorithm for supervised learning.}
+\title{Run BART for Supervised Learning}
 \usage{
 bart(
   X_train,
@@ -14,6 +14,7 @@ bart(
   leaf_basis_test = NULL,
   rfx_group_ids_test = NULL,
   rfx_basis_test = NULL,
+  observation_weights = NULL,
   num_gfr = 5,
   num_burnin = 0,
   num_mcmc = 100,
@@ -59,6 +60,12 @@ that were not in the training set.}
 
 \item{rfx_basis_test}{(Optional) Test set basis for "random-slope" regression in additive random effects model.}
 
+\item{observation_weights}{(Optional) Numeric vector of observation weights of length \code{nrow(X_train)}. Weights are
+applied as \code{y_i | - ~ N(mu(X_i), sigma^2 / w_i)}, so larger weights increase an observation's influence on the fit.
+All weights must be non-negative. Default: \code{NULL} (all observations equally weighted). Compatible with Gaussian
+(continuous/identity) and probit outcome models; not compatible with cloglog link functions. Note: these are
+referred to internally in the C++ layer as "variance weights" (\code{var_weights}), since they scale the residual variance.}
+
 \item{num_gfr}{Number of "warm-start" iterations run using the grow-from-root algorithm (He and Hahn, 2021). Default: 5.}
 
 \item{num_burnin}{Number of "burn-in" iterations of the MCMC sampler. Default: 0.}
@@ -84,7 +91,8 @@ that were not in the training set.}
 \item \code{keep_every} How many iterations of the burned-in MCMC sampler should be run before forests and parameters are retained. Default \code{1}. Setting \code{keep_every <- k} for some \code{k > 1} will "thin" the MCMC samples by retaining every \code{k}-th sample, rather than simply every sample. This can reduce the autocorrelation of the MCMC samples.
 \item \code{num_chains} How many independent MCMC chains should be sampled. If \code{num_mcmc = 0}, this is ignored. If \code{num_gfr = 0}, then each chain is run from root for \code{num_mcmc * keep_every + num_burnin} iterations, with \code{num_mcmc} samples retained. If \code{num_gfr > 0}, each MCMC chain will be initialized from a separate GFR ensemble, with the requirement that \code{num_gfr >= num_chains}. Default: \code{1}. Note that if \code{num_chains > 1}, the returned model object will contain samples from all chains, stored consecutively. That is, if there are 4 chains with 100 samples each, the first 100 samples will be from chain 1, the next 100 samples will be from chain 2, etc... For more detail on working with multi-chain BART models, see \href{https://stochtree.ai/R_docs/pkgdown/articles/MultiChain.html}{the multi chain vignette}.
 \item \code{verbose} Whether or not to print progress during the sampling loops. Default: \code{FALSE}.
-\item \code{probit_outcome_model} Whether or not the outcome should be modeled as explicitly binary via a probit link. If \code{TRUE}, \code{y} must only contain the values \code{0} and \code{1}. Default: \code{FALSE}.
+\item \code{outcome_model} A structured \code{OutcomeModel} object that specifies the outcome type and desired link function. This argument pre-empts the legacy (deprecated) \code{probit_outcome_model} option. Default: \code{OutcomeModel(outcome='continuous', link='identity')}.
+\item \code{probit_outcome_model} Deprecated in favor of \code{outcome_model}. Whether or not the outcome should be modeled as explicitly binary via a probit link. If \code{TRUE}, \code{y} must only contain the values \code{0} and \code{1}. Default: \code{FALSE}.
 \item \code{num_threads} Number of threads to use in the GFR and MCMC algorithms, as well as prediction. If OpenMP is not available on a user's setup, this will default to \code{1}, otherwise to the maximum number of available threads.
 }}
 

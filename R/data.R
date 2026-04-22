@@ -1,9 +1,14 @@
-#' Dataset used to sample a forest
+#' @title Forest Dataset C++ Wrapper
 #'
 #' @description
+#' Wrapper around a C++ dataset class used to sample a forest.
 #' A dataset consists of three matrices / vectors: covariates,
 #' bases, and variance weights. Both the basis vector and variance
 #' weights are optional.
+#'
+#' This class is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 
 ForestDataset <- R6::R6Class(
   classname = "ForestDataset",
@@ -108,25 +113,88 @@ ForestDataset <- R6::R6Class(
     #' @return True if variance weights are loaded, false otherwise
     has_variance_weights = function() {
       return(dataset_has_variance_weights_cpp(self$data_ptr))
+    },
+
+    #' @description
+    #' Whether or not a dataset has auxiliary data stored at the dimension indicated
+    #' @param dim_idx Dimension of auxiliary data
+    #' @return True if auxiliary data has been allocated for `dim_idx` False otherwise
+    has_auxiliary_dimension = function(dim_idx) {
+      return(forest_dataset_has_auxiliary_dimension_cpp(self$data_ptr, dim_idx))
+    },
+
+    #' @description
+    #' Initialize a new dimension / lane of auxiliary data and allocate data in its place
+    #' @param dim_size Size of the new vector of data to allocate
+    #' @return None
+    add_auxiliary_dimension = function(dim_size) {
+      return(forest_dataset_add_auxiliary_dimension_cpp(
+        self$data_ptr,
+        dim_size
+      ))
+    },
+
+    #' @description
+    #' Retrieve auxiliary data value
+    #' @param dim_idx Dimension from which data value to be retrieved
+    #' @param element_idx Element to retrieve from dimension `dim_idx`
+    #' @return Floating point value stored in the requested auxiliary data space
+    get_auxiliary_data_value = function(dim_idx, element_idx) {
+      return(forest_dataset_get_auxiliary_data_value_cpp(
+        self$data_ptr,
+        dim_idx,
+        element_idx
+      ))
+    },
+
+    #' @description
+    #' Set auxiliary data value
+    #' @param dim_idx Dimension in which data value to be set
+    #' @param element_idx Element to set within dimension `dim_idx`
+    #' @param value Data value to set at auxiliary data dimension `dim_idx` and element `element_idx`
+    #' @return None
+    set_auxiliary_data_value = function(dim_idx, element_idx, value) {
+      return(forest_dataset_set_auxiliary_data_value_cpp(
+        self$data_ptr,
+        dim_idx,
+        element_idx,
+        value
+      ))
+    },
+
+    #' @description
+    #' Retrieve entire auxiliary data vector
+    #' @param dim_idx Dimension to retrieve
+    #' @return Vector of all of the auxiliary data stored at dimension `dim_idx`
+    get_auxiliary_data_vector = function(dim_idx) {
+      return(forest_dataset_get_auxiliary_data_vector_cpp(
+        self$data_ptr,
+        dim_idx
+      ))
     }
   )
 )
 
-#' Outcome / partial residual used to sample an additive model.
+#' @title Outcome Data C++ Wrapper
 #'
 #' @description
-#' The outcome class is wrapper around a vector of (mutable)
+#' Outcome / partial residual used to sample an additive model.
+#' The outcome class is a wrapper around a vector of (mutable)
 #' outcomes for ML tasks (supervised learning, causal inference).
 #' When an additive tree ensemble is sampled, the outcome used to
 #' sample a specific model term is the "partial residual" consisting
 #' of the outcome minus the predictions of every other model term
 #' (trees, group random effects, etc...).
+#'
+#' This class is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 
 Outcome <- R6::R6Class(
   classname = "Outcome",
   cloneable = FALSE,
   public = list(
-    #' @field data_ptr External pointer to a C++ Outcome class
+    #' @field data_ptr External pointer to a C++ `Outcome` class
     data_ptr = NULL,
 
     #' @description
@@ -209,11 +277,16 @@ Outcome <- R6::R6Class(
   )
 )
 
-#' Dataset used to sample a random effects model
+#' @title Random Effects Dataset C++ Wrapper
 #'
 #' @description
-#' A dataset consists of three matrices / vectors: group labels,
+#' Dataset used to sample a random effects model.
+#' A random effects dataset consists of three matrices / vectors: group labels,
 #' bases, and variance weights. Variance weights are optional.
+#'
+#' This class is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 
 RandomEffectsDataset <- R6::R6Class(
   classname = "RandomEffectsDataset",
@@ -316,7 +389,13 @@ RandomEffectsDataset <- R6::R6Class(
   )
 )
 
+#' @title Create ForestDataset Object
+#' @description
 #' Create a forest dataset object
+#'
+#' This function is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 #'
 #' @param covariates Matrix of covariates
 #' @param basis (Optional) Matrix of bases used to define a leaf regression
@@ -340,7 +419,13 @@ createForestDataset <- function(
   return(invisible((ForestDataset$new(covariates, basis, variance_weights))))
 }
 
+#' @title Create Outcome Object
+#' @description
 #' Create an outcome object
+#'
+#' This function is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 #'
 #' @param outcome Vector of outcome values
 #'
@@ -355,7 +440,13 @@ createOutcome <- function(outcome) {
   return(invisible((Outcome$new(outcome))))
 }
 
+#' @title Create RandomEffectsDataset Object
+#' @description
 #' Create a random effects dataset object
+#'
+#' This function is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 #'
 #' @param group_labels Vector of group labels
 #' @param basis Matrix of bases used to define the random effects regression (for an intercept-only model, pass an array of ones)

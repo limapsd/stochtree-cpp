@@ -1,5 +1,5 @@
-#' Compute a contrast between two outcome prediction specifications for a BCF model
-#'
+#' @title Compute Contrast for BCF Model
+#' @description
 #' Compute a contrast using a BCF model by making two sets of outcome predictions and taking their difference.
 #' For simple BCF models with binary treatment, this will yield the same prediction as requesting `terms = "cate"`
 #' in the `predict.bcfmodel` function. For more general models, such as models with continuous / multivariate treatments or
@@ -77,11 +77,11 @@
 #' bcf_model <- bcf(X_train = X_train, Z_train = Z_train, y_train = y_train,
 #'                  propensity_train = pi_train, num_gfr = 10,
 #'                  num_burnin = 0, num_mcmc = 10)
-#' tau_hat_test <- compute_contrast_bcf_model(
+#' tau_hat_test <- computeContrastBCFModel(
 #'     bcf_model, X_0=X_test, X_1=X_test, Z_0=rep(0, n_test), Z_1=rep(1, n_test),
 #'     propensity_0 = pi_test, propensity_1 = pi_test
 #' )
-compute_contrast_bcf_model <- function(
+computeContrastBCFModel <- function(
   object,
   X_0,
   X_1,
@@ -103,7 +103,7 @@ compute_contrast_bcf_model <- function(
   if (!(scale %in% c("linear", "probability"))) {
     stop("scale must either be 'linear' or 'probability'")
   }
-  is_probit <- object$model_params$probit_outcome_model
+  is_probit <- object$model_params$outcome_model$link == "probit"
   if ((scale == "probability") && (!is_probit)) {
     stop(
       "scale cannot be 'probability' for models not fit with a probit outcome model"
@@ -247,8 +247,8 @@ compute_contrast_bcf_model <- function(
   }
 }
 
-#' Compute a contrast between two outcome prediction specifications for a BART model
-#'
+#' @title Compute Contrast for BART Model
+#' @description
 #' Compute a contrast using a BART model by making two sets of outcome predictions and taking their difference.
 #' This function provides the flexibility to compute any contrast of interest by specifying covariates, leaf basis, and random effects
 #' bases / IDs for both sides of a two term contrast. For simplicity, we refer to the subtrahend of the contrast as the "control" or
@@ -273,7 +273,7 @@ compute_contrast_bcf_model <- function(
 #' @param rfx_basis_0 (Optional) Test set basis for used for prediction from an additive random effects model in the "control" case.  Must be a matrix or vector.
 #' @param rfx_basis_1 (Optional) Test set basis for used for prediction from an additive random effects model in the "treatment" case. Must be a matrix or vector.
 #' @param type (Optional) Aggregation level of the contrast. Options are "mean", which averages the contrast evaluations over every draw of a BART model, and "posterior", which returns the entire matrix of posterior contrast estimates. Default: "posterior".
-#' @param scale (Optional) Scale of the contrast. Options are "linear", which returns a contrast on the original scale of the mean forest / RFX terms, and "probability", which transforms each contrast term into a probability of observing `y == 1` before taking their difference. "probability" is only valid for models fit with a probit outcome model. Default: "linear".
+#' @param scale (Optional) Scale of the contrast. Options are "linear", which returns contrast of predictions on the original scale of the mean forest / RFX terms, and "probability". `scale = "probability"` is only valid for models fit with a probit / cloglog links on binary or ordinal outcomes. For binary outcome models, `scale = "probability"` will return contrasts of the probability that `y == 1`. For ordinal outcome models, `scale = "probability"` will return contrasts over the "survival function" `P(y > k)` for `k = 1, 2, ..., K-1` where `K` is the total number of categories. Default: "linear".
 #'
 #' @return Contrast matrix or vector, depending on whether type = "mean" or "posterior".
 #' @export
@@ -304,7 +304,7 @@ compute_contrast_bcf_model <- function(
 #' y_train <- y[train_inds]
 #' bart_model <- bart(X_train = X_train, leaf_basis_train = W_train, y_train = y_train,
 #'                    num_gfr = 10, num_burnin = 0, num_mcmc = 10)
-#' contrast_test <- compute_contrast_bart_model(
+#' contrast_test <- computeContrastBARTModel(
 #'     bart_model,
 #'     X_0 = X_test,
 #'     X_1 = X_test,
@@ -313,7 +313,7 @@ compute_contrast_bcf_model <- function(
 #'     type = "posterior",
 #'     scale = "linear"
 #' )
-compute_contrast_bart_model <- function(
+computeContrastBARTModel <- function(
   object,
   X_0,
   X_1,
@@ -333,10 +333,15 @@ compute_contrast_bart_model <- function(
   if (!(scale %in% c("linear", "probability"))) {
     stop("scale must either be 'linear' or 'probability'")
   }
-  is_probit <- object$model_params$probit_outcome_model
-  if ((scale == "probability") && (!is_probit)) {
+  is_probit <- object$model_params$outcome_model$link == "probit"
+  is_cloglog <- object$model_params$outcome_model$link == "cloglog"
+  is_binary_cloglog <- is_cloglog &&
+    (object$model_params$outcome_model$outcome == "binary")
+  is_ordinal_cloglog <- is_cloglog &&
+    (object$model_params$outcome_model$outcome == "ordinal")
+  if ((scale == "probability") && (!(is_probit || is_cloglog))) {
     stop(
-      "scale cannot be 'probability' for models not fit with a probit outcome model"
+      "scale cannot be 'probability' for models not fit with a probit or cloglog outcome model"
     )
   }
   probability_scale <- scale == "probability"
@@ -447,7 +452,7 @@ compute_contrast_bart_model <- function(
     rfx_basis = rfx_basis_0,
     type = "posterior",
     term = "y_hat",
-    scale = "linear"
+    scale = scale
   )
 
   # Predict for the treatment arm
@@ -459,23 +464,43 @@ compute_contrast_bart_model <- function(
     rfx_basis = rfx_basis_1,
     type = "posterior",
     term = "y_hat",
-    scale = "linear"
+    scale = scale
   )
 
-  # Transform to probability scale if requested
-  if (probability_scale) {
-    treatment_preds <- pnorm(treatment_preds)
-    control_preds <- pnorm(control_preds)
+  # Convert ordinal class probabilities to "survival" probabilities
+  if (is_ordinal_cloglog) {
+    if (probability_scale) {
+      num_categories <- object$model_params$cloglog_num_categories
+      control_preds <- class_probs_to_survival_probs(
+        control_preds,
+        num_categories
+      )
+      treatment_preds <- class_probs_to_survival_probs(
+        treatment_preds,
+        num_categories
+      )
+    }
   }
 
   # Compute and return contrast
   if (predict_mean) {
-    return(rowMeans(treatment_preds - control_preds))
+    output_dim <- dim(treatment_preds)
+    if (length(output_dim) == 3) {
+      treatment_collapsed <- apply(treatment_preds, c(1, 2), mean)
+      control_collapsed <- apply(control_preds, c(1, 2), mean)
+      return(treatment_collapsed - control_collapsed)
+    } else if (length(output_dim) == 2) {
+      return(rowMeans(treatment_preds - control_preds))
+    } else {
+      stop("Unexpected output dimension")
+    }
   } else {
     return(treatment_preds - control_preds)
   }
 }
 
+#' @title Sample BCF Posterior Predictive
+#' @description
 #' Sample from the posterior predictive distribution for outcomes modeled by BCF
 #'
 #' @param model_object A fitted BCF model object of class `bcfmodel`.
@@ -497,11 +522,11 @@ compute_contrast_bart_model <- function(
 #' Z <- rbinom(n, 1, pi_X)
 #' y <- 2 * X[,2] + 0.5 * X[,2] * Z + rnorm(n)
 #' bcf_model <- bcf(X_train = X, Z_train = Z, y_train = y, propensity_train = pi_X)
-#' ppd_samples <- sample_bcf_posterior_predictive(
+#' ppd_samples <- sampleBCFPosteriorPredictive(
 #'   model_object = bcf_model, X = X,
 #'   Z = Z, propensity = pi_X
 #' )
-sample_bcf_posterior_predictive <- function(
+sampleBCFPosteriorPredictive <- function(
   model_object,
   X = NULL,
   Z = NULL,
@@ -514,7 +539,7 @@ sample_bcf_posterior_predictive <- function(
   check_model_is_valid(model_object)
 
   # Determine whether the outcome is continuous (Gaussian) or binary (probit-link)
-  is_probit <- model_object$model_params$probit_outcome_model
+  is_probit <- model_object$model_params$outcome_model$link == "probit"
 
   # Check that all the necessary inputs were provided for interval computation
   needs_covariates <- TRUE
@@ -676,6 +701,8 @@ sample_bcf_posterior_predictive <- function(
   return(ppd_array)
 }
 
+#' @title Sample BART Posterior Predictive
+#' @description
 #' Sample from the posterior predictive distribution for outcomes modeled by BART
 #'
 #' @param model_object A fitted BART model object of class `bartmodel`.
@@ -694,10 +721,10 @@ sample_bcf_posterior_predictive <- function(
 #' X <- matrix(rnorm(n * p), nrow = n, ncol = p)
 #' y <- 2 * X[,1] + rnorm(n)
 #' bart_model <- bart(y_train = y, X_train = X)
-#' ppd_samples <- sample_bart_posterior_predictive(
+#' ppd_samples <- sampleBARTPosteriorPredictive(
 #'   model_object = bart_model, X = X
 #' )
-sample_bart_posterior_predictive <- function(
+sampleBARTPosteriorPredictive <- function(
   model_object,
   X = NULL,
   leaf_basis = NULL,
@@ -709,7 +736,13 @@ sample_bart_posterior_predictive <- function(
   check_model_is_valid(model_object)
 
   # Determine whether the outcome is continuous (Gaussian) or binary (probit-link)
-  is_probit <- model_object$model_params$probit_outcome_model
+  is_gaussian <- model_object$model_params$outcome_model$link == "identity"
+  is_probit <- model_object$model_params$outcome_model$link == "probit"
+  is_cloglog <- model_object$model_params$outcome_model$link == "cloglog"
+  is_binary_cloglog <- is_cloglog &&
+    model_object$model_params$outcome_model$outcome == "binary"
+  is_ordinal_cloglog <- is_cloglog &&
+    model_object$model_params$outcome_model$outcome == "ordinal"
 
   # Check that all the necessary inputs were provided for interval computation
   needs_covariates <- model_object$model_params$include_mean_forest
@@ -770,74 +803,151 @@ sample_bart_posterior_predictive <- function(
     }
   }
 
-  # Compute posterior samples
-  bart_preds <- predict(
-    model_object,
-    X = X,
-    leaf_basis = leaf_basis,
-    rfx_group_ids = rfx_group_ids,
-    rfx_basis = rfx_basis,
-    type = "posterior",
-    terms = c("all"),
-    scale = "linear"
-  )
+  if (is_gaussian) {
+    # Compute posterior samples
+    bart_preds <- predict(
+      model_object,
+      X = X,
+      leaf_basis = leaf_basis,
+      rfx_group_ids = rfx_group_ids,
+      rfx_basis = rfx_basis,
+      type = "posterior",
+      terms = c("all"),
+      scale = "linear"
+    )
 
-  # Compute outcome mean and variance for every posterior draw
-  has_mean_term <- (model_object$model_params$include_mean_forest ||
-    model_object$model_params$has_rfx)
-  has_variance_forest <- model_object$model_params$include_variance_forest
-  samples_global_variance <- model_object$model_params$sample_sigma2_global
-  num_posterior_draws <- model_object$model_params$num_samples
-  num_observations <- nrow(X)
-  if (has_mean_term) {
-    ppd_mean <- bart_preds$y_hat
-  } else {
-    ppd_mean <- 0
-  }
-  if (has_variance_forest) {
-    ppd_variance <- bart_preds$variance_forest_predictions
-  } else {
-    if (samples_global_variance) {
-      ppd_variance <- matrix(
-        rep(
-          model_object$sigma2_global_samples,
-          each = num_observations
-        ),
-        nrow = num_observations
+    # Compute outcome mean and variance for every posterior draw
+    has_mean_term <- (model_object$model_params$include_mean_forest ||
+      model_object$model_params$has_rfx)
+    has_variance_forest <- model_object$model_params$include_variance_forest
+    samples_global_variance <- model_object$model_params$sample_sigma2_global
+    num_posterior_draws <- model_object$model_params$num_samples
+    num_observations <- nrow(X)
+    if (has_mean_term) {
+      ppd_mean <- bart_preds$y_hat
+    } else {
+      ppd_mean <- 0
+    }
+    if (has_variance_forest) {
+      ppd_variance <- bart_preds$variance_forest_predictions
+    } else {
+      if (samples_global_variance) {
+        ppd_variance <- matrix(
+          rep(
+            model_object$sigma2_global_samples,
+            each = num_observations
+          ),
+          nrow = num_observations
+        )
+      } else {
+        ppd_variance <- model_object$model_params$sigma2_init
+      }
+    }
+
+    # Sample from the posterior predictive distribution
+    if (is.null(num_draws_per_sample)) {
+      ppd_draw_multiplier <- posterior_predictive_heuristic_multiplier(
+        num_posterior_draws,
+        num_observations
       )
     } else {
-      ppd_variance <- model_object$model_params$sigma2_init
+      ppd_draw_multiplier <- num_draws_per_sample
     }
-  }
-
-  # Sample from the posterior predictive distribution
-  if (is.null(num_draws_per_sample)) {
-    ppd_draw_multiplier <- posterior_predictive_heuristic_multiplier(
-      num_posterior_draws,
+    num_ppd_draws <- ppd_draw_multiplier *
+      num_posterior_draws *
       num_observations
-    )
-  } else {
-    ppd_draw_multiplier <- num_draws_per_sample
-  }
-  num_ppd_draws <- ppd_draw_multiplier * num_posterior_draws * num_observations
-  ppd_vector <- rnorm(num_ppd_draws, ppd_mean, sqrt(ppd_variance))
+    ppd_vector <- rnorm(num_ppd_draws, ppd_mean, sqrt(ppd_variance))
 
-  # Reshape data
-  if (ppd_draw_multiplier > 1) {
-    ppd_array <- array(
-      ppd_vector,
-      dim = c(num_observations, num_posterior_draws, ppd_draw_multiplier)
+    # Reshape data
+    if (ppd_draw_multiplier > 1) {
+      ppd_array <- array(
+        ppd_vector,
+        dim = c(num_observations, num_posterior_draws, ppd_draw_multiplier)
+      )
+    } else {
+      ppd_array <- array(
+        ppd_vector,
+        dim = c(num_observations, num_posterior_draws)
+      )
+    }
+  } else if (is_probit || is_binary_cloglog) {
+    # Compute posterior probability samples
+    bart_preds <- predict(
+      model_object,
+      X = X,
+      leaf_basis = leaf_basis,
+      rfx_group_ids = rfx_group_ids,
+      rfx_basis = rfx_basis,
+      type = "posterior",
+      terms = "y_hat",
+      scale = "probability"
     )
-  } else {
-    ppd_array <- array(
-      ppd_vector,
-      dim = c(num_observations, num_posterior_draws)
-    )
-  }
 
-  # Binarize outcomes for probit models
-  if (is_probit) {
-    ppd_array <- (ppd_array > 0.0) * 1
+    # Sample from the posterior predictive distribution
+    num_posterior_draws <- model_object$model_params$num_samples
+    num_observations <- nrow(X)
+    if (is.null(num_draws_per_sample)) {
+      ppd_draw_multiplier <- posterior_predictive_heuristic_multiplier(
+        num_posterior_draws,
+        num_observations
+      )
+    } else {
+      ppd_draw_multiplier <- num_draws_per_sample
+    }
+    num_ppd_draws <- ppd_draw_multiplier *
+      num_posterior_draws *
+      num_observations
+    ppd_vector <- rbinom(num_ppd_draws, size = 1, prob = bart_preds)
+
+    # Reshape data
+    if (ppd_draw_multiplier > 1) {
+      ppd_array <- array(
+        ppd_vector,
+        dim = c(num_observations, num_posterior_draws, ppd_draw_multiplier)
+      )
+    } else {
+      ppd_array <- array(
+        ppd_vector,
+        dim = c(num_observations, num_posterior_draws)
+      )
+    }
+  } else if (is_ordinal_cloglog) {
+    # Compute posterior probability samples
+    bart_preds <- predict(
+      model_object,
+      X = X,
+      leaf_basis = leaf_basis,
+      rfx_group_ids = rfx_group_ids,
+      rfx_basis = rfx_basis,
+      type = "posterior",
+      terms = "y_hat",
+      scale = "probability"
+    )
+
+    # Sample from the posterior predictive distribution
+    num_categories <- model_object$model_params$cloglog_num_categories
+    num_posterior_draws <- model_object$model_params$num_samples
+    num_observations <- nrow(X)
+    if (is.null(num_draws_per_sample)) {
+      ppd_draw_multiplier <- posterior_predictive_heuristic_multiplier(
+        num_posterior_draws,
+        num_observations
+      )
+    } else {
+      ppd_draw_multiplier <- num_draws_per_sample
+    }
+    ppd_vector <- apply(bart_preds, c(1, 3), function(x) {
+      sample(1:num_categories, ppd_draw_multiplier, replace = T, prob = x)
+    })
+
+    # Reshape data
+    if (ppd_draw_multiplier > 1) {
+      # apply returns (ppd_draw_multiplier x num_observations x num_posterior_draws)
+      ppd_array <- aperm(ppd_vector, c(2, 3, 1))
+    } else {
+      # apply returns (num_observations x num_posterior_draws) matrix
+      ppd_array <- ppd_vector
+    }
   }
 
   return(ppd_array)
@@ -854,8 +964,8 @@ posterior_predictive_heuristic_multiplier <- function(
   }
 }
 
-#' Compute posterior credible intervals for BCF model terms
-#'
+#' @title Compute BCF Posterior Credible Intervals
+#' @description
 #' Compute posterior credible intervals for specified terms from a fitted BCF model. Supports intervals for prognostic forests, CATE forests, variance forests, random effects, and overall mean outcome predictions.
 #'
 #' @param model_object A fitted BCF model object of class `bcfmodel`.
@@ -882,7 +992,7 @@ posterior_predictive_heuristic_multiplier <- function(
 #' y <- mu_X + tau_X * Z + rnorm(n)
 #' bcf_model <- bcf(X_train = X, Z_train = Z, y_train = y,
 #'                  propensity_train = pi_X)
-#' intervals <- compute_bcf_posterior_interval(
+#' intervals <- computeBCFPosteriorInterval(
 #'  model_object = bcf_model,
 #'  terms = c("prognostic_function", "cate"),
 #'  X = X,
@@ -890,7 +1000,7 @@ posterior_predictive_heuristic_multiplier <- function(
 #'  propensity = pi_X,
 #'  level = 0.90
 #' )
-compute_bcf_posterior_interval <- function(
+computeBCFPosteriorInterval <- function(
   model_object,
   terms,
   level = 0.95,
@@ -914,7 +1024,7 @@ compute_bcf_posterior_interval <- function(
   if (!(scale %in% c("linear", "probability"))) {
     stop("scale must either be 'linear' or 'probability'")
   }
-  is_probit <- model_object$model_params$probit_outcome_model
+  is_probit <- model_object$model_params$outcome_model$link == "probit"
   if ((scale == "probability") && (!is_probit)) {
     stop(
       "scale cannot be 'probability' for models not fit with a probit outcome model"
@@ -945,11 +1055,12 @@ compute_bcf_posterior_interval <- function(
       )
     }
   }
-  needs_covariates_intermediate <- ((("y_hat" %in% terms) ||
-    ("all" %in% terms)))
-  needs_covariates <- (("prognostic_function" %in% terms) ||
-    ("cate" %in% terms) ||
-    ("variance_forest" %in% terms) ||
+  predict_terms <- terms
+  needs_covariates_intermediate <- ((("y_hat" %in% predict_terms) ||
+    ("all" %in% predict_terms)))
+  needs_covariates <- (("prognostic_function" %in% predict_terms) ||
+    ("cate" %in% predict_terms) ||
+    ("variance_forest" %in% predict_terms) ||
     (needs_covariates_intermediate))
   if (needs_covariates) {
     if (is.null(X)) {
@@ -1009,10 +1120,10 @@ compute_bcf_posterior_interval <- function(
       }
     }
   }
-  needs_rfx_data_intermediate <- ((("y_hat" %in% terms) ||
-    ("all" %in% terms)) &&
+  needs_rfx_data_intermediate <- ((("y_hat" %in% predict_terms) ||
+    ("all" %in% predict_terms)) &&
     model_object$model_params$has_rfx)
-  needs_rfx_data <- (("rfx" %in% terms) ||
+  needs_rfx_data <- (("rfx" %in% predict_terms) ||
     (needs_rfx_data_intermediate))
   if (needs_rfx_data) {
     if (is.null(rfx_group_ids)) {
@@ -1044,52 +1155,57 @@ compute_bcf_posterior_interval <- function(
     }
   }
 
-  # Compute posterior matrices for the requested model terms
-  predictions <- predict(
-    model_object,
-    X = X,
-    Z = Z,
-    propensity = propensity,
-    rfx_group_ids = rfx_group_ids,
-    rfx_basis = rfx_basis,
-    type = "posterior",
-    terms = terms,
-    scale = scale
-  )
-  has_multiple_terms <- ifelse(is.list(predictions), TRUE, FALSE)
+  result <- list()
 
-  # Compute the interval
-  if (has_multiple_terms) {
-    result <- list()
-    for (term_name in names(predictions)) {
-      if (!is.null(predictions[[term_name]])) {
-        result[[term_name]] <- summarize_interval(
-          predictions[[term_name]],
-          sample_dim = 2,
-          level = level
-        )
-      } else {
-        result[[term_name]] <- NULL
+  # Compute posterior matrices for predict-able terms (if any)
+  if (length(predict_terms) > 0) {
+    predictions <- predict(
+      model_object,
+      X = X,
+      Z = Z,
+      propensity = propensity,
+      rfx_group_ids = rfx_group_ids,
+      rfx_basis = rfx_basis,
+      type = "posterior",
+      terms = predict_terms,
+      scale = scale
+    )
+    if (is.list(predictions)) {
+      for (term_name in names(predictions)) {
+        if (!is.null(predictions[[term_name]])) {
+          result[[term_name]] <- summarize_interval(
+            predictions[[term_name]],
+            sample_dim = 2,
+            level = level
+          )
+        } else {
+          result[[term_name]] <- NULL
+        }
       }
+    } else {
+      result[[predict_terms]] <- summarize_interval(
+        predictions,
+        sample_dim = 2,
+        level = level
+      )
     }
-    return(result)
-  } else {
-    return(summarize_interval(
-      predictions,
-      sample_dim = 2,
-      level = level
-    ))
   }
+
+  # Return single interval directly if only one term was requested
+  if (length(terms) == 1) {
+    return(result[[terms]])
+  }
+  return(result)
 }
 
-#' Compute posterior credible intervals for specified terms from a fitted BART model.
-#'
+#' @title Compute BART Posterior Credible Intervals
+#' @description
 #' Compute posterior credible intervals for specified terms from a fitted BART model. Supports intervals for mean functions, variance functions, random effects, and overall outcome predictions.
 #'
 #' @param model_object A fitted BART or BCF model object of class `bartmodel`.
 #' @param terms A character string specifying the model term(s) for which to compute intervals. Options for BART models are `"mean_forest"`, `"variance_forest"`, `"rfx"`, or `"y_hat"`.
 #' @param level A numeric value between 0 and 1 specifying the credible interval level (default is 0.95 for a 95% credible interval).
-#' @param scale (Optional) Scale of mean function predictions. Options are "linear", which returns predictions on the original scale of the mean forest / RFX terms, and "probability", which transforms predictions into a probability of observing `y == 1`. "probability" is only valid for models fit with a probit outcome model. Default: "linear".
+#' @param scale (Optional) Scale of mean function predictions. Options are "linear", which returns predictions on the original scale of the mean forest / RFX terms, and "probability". `scale = "probability"` is only valid for models fit with a probit / cloglog links on binary or ordinal outcomes. For binary outcome models, `scale = "probability"` will return an interval over the probability that `y == 1`. For ordinal outcome models, `scale = "probability"` will return intervals over the "survival function" `P(y > k)` for `k = 1, 2, ..., K-1` where `K` is the total number of categories. Default: "linear".
 #' @param X A matrix or data frame of covariates at which to compute the intervals. Required if the requested term depends on covariates (e.g., mean forest, variance forest, or overall predictions).
 #' @param leaf_basis An optional matrix of basis function evaluations for mean forest models with regression defined in the leaves. Required for "leaf regression" models.
 #' @param rfx_group_ids An optional vector of group IDs for random effects. Required if the requested term includes random effects.
@@ -1104,14 +1220,14 @@ compute_bcf_posterior_interval <- function(
 #' X <- matrix(rnorm(n * p), nrow = n, ncol = p)
 #' y <- 2 * X[,1] + rnorm(n)
 #' bart_model <- bart(y_train = y, X_train = X)
-#' intervals <- compute_bart_posterior_interval(
+#' intervals <- computeBARTPosteriorInterval(
 #'  model_object = bart_model,
 #'  terms = c("mean_forest", "y_hat"),
 #'  X = X,
 #'  level = 0.90
 #' )
 #' @export
-compute_bart_posterior_interval <- function(
+computeBARTPosteriorInterval <- function(
   model_object,
   terms,
   level = 0.95,
@@ -1134,10 +1250,15 @@ compute_bart_posterior_interval <- function(
   if (!(scale %in% c("linear", "probability"))) {
     stop("scale must either be 'linear' or 'probability'")
   }
-  is_probit <- model_object$model_params$probit_outcome_model
-  if ((scale == "probability") && (!is_probit)) {
+  is_probit <- model_object$model_params$outcome_model$link == "probit"
+  is_cloglog <- model_object$model_params$outcome_model$link == "cloglog"
+  is_binary_cloglog <- is_cloglog &&
+    (model_object$model_params$outcome_model$outcome == "binary")
+  is_ordinal_cloglog <- is_cloglog &&
+    (model_object$model_params$outcome_model$outcome == "ordinal")
+  if ((scale == "probability") && (!(is_probit || is_cloglog))) {
     stop(
-      "scale cannot be 'probability' for models not fit with a probit outcome model"
+      "scale cannot be 'probability' for models not fit with a probit or cloglog link for binary / ordinal outcome data"
     )
   }
 
@@ -1209,6 +1330,9 @@ compute_bart_posterior_interval <- function(
     }
   }
 
+  # Extract number of samples in the model
+  num_samples <- model_object$model_params$num_samples
+
   # Compute posterior matrices for the requested model terms
   predictions <- predict(
     model_object,
@@ -1222,14 +1346,39 @@ compute_bart_posterior_interval <- function(
   )
   has_multiple_terms <- ifelse(is.list(predictions), TRUE, FALSE)
 
+  # Convert ordinal class probabilities to "survival" probabilities
+  if (is_ordinal_cloglog) {
+    if (scale == "probability") {
+      num_categories <- model_object$model_params$cloglog_num_categories
+      if (has_multiple_terms) {
+        for (term_name in names(predictions)) {
+          if (!is.null(predictions[[term_name]])) {
+            predictions[[term_name]] <- class_probs_to_survival_probs(
+              predictions[[term_name]],
+              num_categories
+            )
+          } else {
+            result[[term_name]] <- NULL
+          }
+        }
+      } else {
+        predictions <- class_probs_to_survival_probs(
+          predictions,
+          num_categories
+        )
+      }
+    }
+  }
+
   # Compute the interval
   if (has_multiple_terms) {
     result <- list()
     for (term_name in names(predictions)) {
       if (!is.null(predictions[[term_name]])) {
+        sample_dim <- compute_sample_dim(predictions[[term_name]], num_samples)
         result[[term_name]] <- summarize_interval(
           predictions[[term_name]],
-          sample_dim = 2,
+          sample_dim = sample_dim,
           level = level
         )
       } else {
@@ -1238,12 +1387,53 @@ compute_bart_posterior_interval <- function(
     }
     return(result)
   } else {
+    sample_dim <- compute_sample_dim(predictions, num_samples)
     return(summarize_interval(
       predictions,
-      sample_dim = 2,
+      sample_dim = sample_dim,
       level = level
     ))
   }
+}
+
+class_probs_to_survival_probs <- function(probs, num_categories) {
+  pred_dims <- dim(probs)
+  pred_dims[2] <- pred_dims[2] - 1
+  output <- array(NA_real_, dim = pred_dims)
+  for (i in 2:num_categories) {
+    output[, i - 1, ] <- apply(
+      probs[,
+        i:num_categories,
+        ,
+        drop = F
+      ],
+      c(1, 3),
+      sum
+    )
+  }
+  return(output)
+}
+
+compute_sample_dim <- function(predictions, num_samples) {
+  term_dims <- dim(predictions)
+  if (length(term_dims) <= 1) {
+    sample_dim <- 1
+  } else {
+    sample_dim <- which(term_dims == num_samples)
+    if (length(sample_dim) > 1) {
+      # Use a heuristic and raise a warning
+      warning(
+        "Multiple posterior dimensions matching the number of posterior draws found in the array, using the last one as the MCMC index"
+      )
+      sample_dim <- sample_dim[length(sample_dim)]
+    } else if (length(sample_dim) == 0) {
+      # "No hit" case raises an error
+      stop(
+        "No posterior dimension was found that matches the number of posterior draws"
+      )
+    }
+  }
+  return(sample_dim)
 }
 
 summarize_interval <- function(array, sample_dim = 2, level = 0.95) {

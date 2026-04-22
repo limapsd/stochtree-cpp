@@ -1,8 +1,8 @@
-#' Class that wraps a C++ random number generator (for reproducibility)
-#'
+#' @title Random Number Generator C++ Wrapper
 #' @description
-#' Persists a C++ random number generator throughout an R session to
-#' ensure reproducibility from a given random seed. If no seed is provided,
+#' Wrapper around a C++ random number generator object (for reproducibility).
+#' The class persists a C++ random number generator throughout an R session to
+#' ensure a given seed generates the same outputs (on the same OS). If no seed is provided,
 #' the C++ random number generator is initialized using `std::random_device`.
 
 CppRNG <- R6::R6Class(
@@ -22,12 +22,15 @@ CppRNG <- R6::R6Class(
   )
 )
 
-#' Class that defines and samples a forest model
-#'
+#' @title Forest Model C++ Wrapper
 #' @description
-#' Hosts the C++ data structures needed to sample an ensemble of decision
-#' trees, and exposes functionality to run a forest sampler
+#' Wraps the C++ data structures needed to sample an ensemble of decision
+#' trees and exposes functionality to run a forest sampler
 #' (using either MCMC or the grow-from-root algorithm).
+#'
+#' This class is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 
 ForestModel <- R6::R6Class(
   classname = "ForestModel",
@@ -111,8 +114,13 @@ ForestModel <- R6::R6Class(
       leaf_model_int <- forest_model_config$leaf_model_type
       leaf_model_scale <- forest_model_config$leaf_model_scale
       variable_weights <- forest_model_config$variable_weights
-      a_forest <- forest_model_config$variance_forest_shape
-      b_forest <- forest_model_config$variance_forest_scale
+      if (leaf_model_int == 4) {
+        a_forest <- forest_model_config$cloglog_forest_shape
+        b_forest <- forest_model_config$cloglog_forest_rate
+      } else {
+        a_forest <- forest_model_config$variance_forest_shape
+        b_forest <- forest_model_config$variance_forest_scale
+      }
       global_scale <- global_model_config$global_error_variance
       cutpoint_grid_size <- forest_model_config$cutpoint_grid_size
       num_features_subsample <- forest_model_config$num_features_subsample
@@ -317,6 +325,8 @@ ForestModel <- R6::R6Class(
   )
 )
 
+#' @title Create CppRNG Object
+#' @description
 #' Create an R class that wraps a C++ random number generator
 #'
 #' @param random_seed (Optional) random seed for sampling
@@ -331,7 +341,13 @@ createCppRNG <- function(random_seed = -1) {
   return(invisible((CppRNG$new(random_seed))))
 }
 
+#' @title Create ForestModel Object
+#' @description
 #' Create a forest model object
+#'
+#' This function is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 #'
 #' @param forest_dataset ForestDataset object, used to initialize forest sampling data structures
 #' @param forest_model_config ForestModelConfig object containing forest model parameters and settings
@@ -378,7 +394,13 @@ createForestModel <- function(
 }
 
 
+#' @title Sample Without Replacement
+#' @description
 #' Draw `sample_size` samples from `population_vector` without replacement, weighted by `sampling_probabilities`
+#'
+#' This function is intended for advanced use cases in which users require detailed control of sampling algorithms and data structures.
+#' Minimal input validation and error checks are performed -- users are responsible for providing the correct inputs.
+#' For tutorials on the "proper" usage of the stochtree's advanced workflow, we provide several vignettes at <https://stochtree.ai/>
 #'
 #' @param population_vector Vector from which to draw samples.
 #' @param sampling_probabilities Vector of probabilities of drawing each element of `population_vector`.
